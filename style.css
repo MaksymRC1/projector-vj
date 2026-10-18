@@ -613,6 +613,53 @@ body[data-view="remote"] .mobile-vj-deck {
   cursor: pointer;
 }
 
+.room-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(155, 93, 229, 0.2);
+  border: 1px solid rgba(155, 93, 229, 0.55);
+  color: #e0c3fc;
+  cursor: pointer;
+}
+
+.room-pill.online {
+  background: rgba(0, 245, 212, 0.18);
+  border-color: var(--neon-cyan);
+  color: #fff;
+}
+
+.room-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.room-input-row input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 9px 12px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  user-select: text;
+}
+
+.join-room-btn {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--neon-purple);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 @media (max-width: 420px) {
   .source-pills {
     grid-template-columns: repeat(2, 1fr);

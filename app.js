@@ -29,7 +29,21 @@ class AuraVJApp {
     const view = params.get("view");
     if (view && ["split", "projector", "remote"].includes(view)) {
       this.setView(view);
+    } else if (window.AndroidAudioBridge) {
+      // Якщо запущено всередині Android APK на проекторі — одразу вмикаємо режим Проектора
+      this.setView("projector");
     }
+
+    // Глобальний хук для прийому системного звуку Android Visualizer(0) (YouTube Music / Cast)
+    window.onAndroidNativeFFT = (binsArray) => {
+      if (this.dsp.activeSource !== "native_android") {
+        this.dsp.activeSource = "native_android";
+        this.dsp.isRunning = true;
+        this.audioStarted = true;
+        this.highlightSourceButton("native_android");
+      }
+      this.dsp.ingestNativeAndroidBins(binsArray);
+    };
   }
 
   setView(viewName) {
@@ -56,6 +70,14 @@ class AuraVJApp {
   }
 
   setupUI() {
+    const roomTextEl = document.getElementById("roomCodeText");
+    if (roomTextEl) roomTextEl.textContent = this.sync.roomId;
+
+    // Якщо це нативний Android APK на проекторі — запускаємо системне перехоплення звуку
+    if (window.AndroidAudioBridge) {
+      this.ensureAudioStarted("native_android");
+    }
+
     // Автозапуск звуку при першому дотику користувача
     const unlockAudio = () => {
       if (!this.audioStarted) {
@@ -111,15 +133,30 @@ class AuraVJApp {
       btn.addEventListener("click", () => selectMode(btn.dataset.mode));
     });
 
-    // QR-код та Повний екран
+    // QR-код, Код Кімнати та Повний екран
     const qrModal = document.getElementById("qrModal");
-    document.getElementById("btnQrModal").addEventListener("click", () => {
+    const openQrModal = () => {
       this.renderQrModal();
       qrModal.hidden = false;
-    });
+    };
+    document.getElementById("btnQrModal").addEventListener("click", openQrModal);
+    const btnRoomBadge = document.getElementById("btnRoomBadge");
+    if (btnRoomBadge) {
+      btnRoomBadge.addEventListener("click", openQrModal);
+    }
     document.getElementById("btnCloseQr").addEventListener("click", () => {
       qrModal.hidden = true;
     });
+    const btnJoinRoom = document.getElementById("btnJoinRoom");
+    if (btnJoinRoom) {
+      btnJoinRoom.addEventListener("click", () => {
+        const val = document.getElementById("roomInput").value.trim();
+        if (val) {
+          this.sync.setRoomId(val);
+          this.renderQrModal();
+        }
+      });
+    }
 
     document.getElementById("btnFullscreen").addEventListener("click", () => {
       if (!document.fullscreenElement) {
@@ -379,8 +416,14 @@ class AuraVJApp {
   }
 
   renderQrModal() {
-    const remoteUrl = `${window.location.origin}${window.location.pathname}?view=remote`;
+    const baseUrl =
+      window.location.protocol === "file:"
+        ? "https://maksymrc1.github.io/projector-vj/"
+        : `${window.location.origin}${window.location.pathname}`;
+    const remoteUrl = `${baseUrl}?view=remote&room=${encodeURIComponent(this.sync.roomId)}`;
     document.getElementById("remoteUrlText").textContent = remoteUrl;
+    const roomInput = document.getElementById("roomInput");
+    if (roomInput) roomInput.value = this.sync.roomId;
     const qrBox = document.getElementById("qrCodeBox");
     const encoded = encodeURIComponent(remoteUrl);
     qrBox.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR Code для підключення смартфона" />`;
@@ -388,6 +431,13 @@ class AuraVJApp {
 
   handleSyncMessage(msg) {
     if (!msg || !msg.type) return;
+    if (msg.type === "syncStatus") {
+      const badge = document.getElementById("btnRoomBadge");
+      const text = document.getElementById("roomCodeText");
+      if (text && msg.roomId) text.textContent = msg.roomId;
+      if (badge) badge.classList.toggle("online", !!msg.connected);
+      return;
+    }
     if (msg.type === "mode") {
       this.visualizer.setMode(msg.mode);
       this.highlightModeButtons(msg.mode);
@@ -403,8 +453,11 @@ class AuraVJApp {
         this.visualizer.triggerShockwave();
       }
     } else if (msg.type === "dspTelemetry") {
-      // Якщо проектор не має власного активного мікрофона або слухає смартфон
-      if (this.currentView === "projector") {
+      // Якщо проектор не перехоплює системний звук Android APK — приймає спектр з iPhone
+      if (
+        this.currentView === "projector" &&
+        this.dsp.activeSource !== "native_android"
+      ) {
         this.dsp.activeSource = "remote";
         this.dsp.ingestRemoteTelemetry(msg.state);
       }

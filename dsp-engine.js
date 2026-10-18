@@ -55,6 +55,7 @@ class DSPEngine {
 
     // Дані від віддаленого смартфона-сенсора
     this.remoteTelemetry = null;
+    this.hasNativeAndroidBins = false;
   }
 
   async start(sourceType = "synth", file = null) {
@@ -64,6 +65,19 @@ class DSPEngine {
     if (sourceType === "remote") {
       this.isRunning = true;
       return { source: "remote" };
+    }
+
+    if (sourceType === "native_android") {
+      if (window.AndroidAudioBridge && window.AndroidAudioBridge.startSystemAudio) {
+        window.AndroidAudioBridge.startSystemAudio();
+        this.isRunning = true;
+        this.lastBeatTime = performance.now();
+        return { source: "native_android" };
+      } else {
+        throw new Error(
+          "Системне захоплення YouTube Music (Visualizer API) працює у встановленому Android APK додатку на проекторі"
+        );
+      }
     }
 
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -272,6 +286,18 @@ class DSPEngine {
   }
 
   /**
+   * Прийом системних FFT-бінів напряму з Android Visualizer(0) API (YouTube Music / Cast)
+   */
+  ingestNativeAndroidBins(binsArray) {
+    if (!binsArray) return;
+    const len = Math.min(this.freqData.length, binsArray.length);
+    for (let i = 0; i < len; i++) {
+      this.freqData[i] = binsArray[i];
+    }
+    this.hasNativeAndroidBins = true;
+  }
+
+  /**
    * Головний цикл DSP-обробки на кожному кадрі
    */
   update(now = performance.now()) {
@@ -279,12 +305,15 @@ class DSPEngine {
       return this.remoteTelemetry;
     }
 
-    if (!this.analyser || !this.isRunning) {
-      return this.getEmptyState();
+    if (this.activeSource === "native_android") {
+      if (!this.hasNativeAndroidBins) return this.getEmptyState();
+    } else {
+      if (!this.analyser || !this.isRunning) {
+        return this.getEmptyState();
+      }
+      this.analyser.getByteFrequencyData(this.freqData);
+      this.analyser.getByteTimeDomainData(this.waveData);
     }
-
-    this.analyser.getByteFrequencyData(this.freqData);
-    this.analyser.getByteTimeDomainData(this.waveData);
 
     const sampleRate = this.ctx ? this.ctx.sampleRate : 44100;
     const binHz = sampleRate / this.fftSize; // ~43.06 Гц на 1 бін при 1024

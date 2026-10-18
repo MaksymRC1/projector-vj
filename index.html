@@ -16,6 +16,9 @@
         <span class="pulse-dot" id="beatLed"></span>
         <span class="brand-title">AURA <strong>VJ</strong></span>
         <span class="bpm-pill" id="bpmDisplay">128 BPM</span>
+        <button class="room-pill" id="btnRoomBadge" title="З'єднати iPhone та Проектор за QR/кодом кімнати">
+          🔗 <span id="roomCodeText">----</span>
+        </button>
       </div>
 
       <div class="view-switcher" role="tablist" aria-label="Режим екрана">
@@ -112,13 +115,13 @@
             🎹 Техно-Біт (Live)
           </button>
           <button class="src-pill" data-source="mic" tabindex="-1">
-            🎙️ Мікрофон Смартфона
+            🎙️ Мікрофон (iPhone/TV)
+          </button>
+          <button class="src-pill" data-source="native_android" tabindex="-1">
+            📺 YouTube Music (APK)
           </button>
           <button class="src-pill" data-source="file" tabindex="-1">
             🎵 Аудіофайл (MP3)
-          </button>
-          <button class="src-pill" data-source="screen" tabindex="-1">
-            💻 Системний звук
           </button>
         </div>
         <input type="file" id="audioFileInput" accept="audio/*" hidden />
@@ -198,12 +201,20 @@
     <!-- Модальне вікно QR-підключення смартфона до проектора -->
     <div class="qr-modal" id="qrModal" hidden>
       <div class="qr-card">
-        <h3>📱 Підключення Смартфона</h3>
+        <h3>📱 Зв'язок iPhone ↔ Проектор</h3>
         <p>
-          Відкрийте цю адресу на смартфоні в одній Wi-Fi мережі — телефон стане
-          <strong>VJ-пультом та бездротовим мікрофоном-сенсором</strong>:
+          Скануйте QR камерою iPhone або введіть однаковий <strong>Код Кімнати</strong> на обох пристроях (працює навіть між 4G та Wi-Fi!):
         </p>
         <div class="qr-box" id="qrCodeBox"></div>
+        <div class="room-input-row">
+          <input
+            type="text"
+            id="roomInput"
+            maxlength="8"
+            placeholder="Код кімнати (напр. 4821)"
+          />
+          <button id="btnJoinRoom" class="join-room-btn">Підключити</button>
+        </div>
         <code class="remote-url" id="remoteUrlText"></code>
         <button class="close-modal-btn" id="btnCloseQr">Закрити</button>
       </div>
