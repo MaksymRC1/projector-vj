@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>AURA VJ — Проекційна Світломузика & Смарт-Пульт</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body data-view="split">
+    <!-- Верхній перемикач режиму відображення (Split для смартфона / Тільки Проектор / Тільки Пульт) -->
+    <header class="top-bar" id="topBar">
+      <div class="brand-status">
+        <span class="pulse-dot" id="beatLed"></span>
+        <span class="brand-title">AURA <strong>VJ</strong></span>
+        <span class="bpm-pill" id="bpmDisplay">128 BPM</span>
+      </div>
+
+      <div class="view-switcher" role="tablist" aria-label="Режим екрана">
+        <button class="view-btn active" data-target-view="split" title="Екран проектора + Пульт на одному екрані">
+          📱 Split
+        </button>
+        <button class="view-btn" data-target-view="projector" title="Повний екран для Проектора та Smart TV">
+          📽️ Проектор
+        </button>
+        <button class="view-btn" data-target-view="remote" title="Повноекранний VJ-пульт для смартфона">
+          🎛️ Пульт
+        </button>
+      </div>
+    </header>
+
+    <!-- СЕКЦІЯ 1: ЕКРАН ПРОЕКТОРА / SMART TV (WebGL Shader Canvas + Apple TV HUD Dock) -->
+    <section class="projector-stage" id="projectorStage">
+      <canvas id="shaderCanvas"></canvas>
+
+      <!-- Живий міні-індикатор 4 частотних смуг DSP (Sub-Bass, Bass, Mid, High) -->
+      <div class="dsp-telemetry-hud" id="dspHud">
+        <div class="band-meter">
+          <div class="band-fill sub" id="meterSub"></div>
+          <span>SUB</span>
+        </div>
+        <div class="band-meter">
+          <div class="band-fill bass" id="meterBass"></div>
+          <span>BASS</span>
+        </div>
+        <div class="band-meter">
+          <div class="band-fill mid" id="meterMid"></div>
+          <span>MID</span>
+        </div>
+        <div class="band-meter">
+          <div class="band-fill high" id="meterHigh"></div>
+          <span>HIGH</span>
+        </div>
+      </div>
+
+      <!-- Apple TV Style Glassmorphic Dock (автоматично ховається в режимі Проектора) -->
+      <nav
+        class="projector-dock"
+        id="projectorDock"
+        aria-label="Панель керування проектором (підтримує пульт Smart TV)"
+      >
+        <button class="dock-item active" data-mode="lasers" tabindex="0">
+          <span class="dock-icon">🟢</span>
+          <span class="dock-label">Лазери</span>
+        </button>
+        <button class="dock-item" data-mode="synthwave" tabindex="-1">
+          <span class="dock-icon">🟣</span>
+          <span class="dock-label">3D Сітка</span>
+        </button>
+        <button class="dock-item" data-mode="ferrofluid" tabindex="-1">
+          <span class="dock-icon">🔵</span>
+          <span class="dock-label">Феррофлюїд</span>
+        </button>
+        <button class="dock-item" data-mode="tunnel" tabindex="-1">
+          <span class="dock-icon">🟠</span>
+          <span class="dock-label">Тунель</span>
+        </button>
+        <button class="dock-item" data-mode="liquid" tabindex="-1">
+          <span class="dock-icon">🌈</span>
+          <span class="dock-label">Аура</span>
+        </button>
+        <button class="dock-item" data-mode="fractal" tabindex="-1">
+          <span class="dock-icon">⚡</span>
+          <span class="dock-label">Мандала</span>
+        </button>
+        <button class="dock-item dock-action" id="btnQrModal" tabindex="-1">
+          <span class="dock-icon">📱</span>
+          <span class="dock-label">QR Пульт</span>
+        </button>
+        <button class="dock-item dock-action" id="btnFullscreen" tabindex="-1">
+          <span class="dock-icon">⛶</span>
+          <span class="dock-label">Весь екран</span>
+        </button>
+      </nav>
+    </section>
+
+    <!-- СЕКЦІЯ 2: МОБІЛЬНИЙ ПУЛЬТ КЕРУВАННЯ НА СМАРТФОНІ (OLED VJ CONTROLLER) -->
+    <section class="mobile-vj-deck" id="mobileDeck" aria-label="Мобільний VJ Пульт">
+      <!-- Джерело звуку та сенсор смартфона -->
+      <div class="deck-card source-strip">
+        <div class="strip-header">
+          <span class="strip-title">🔊 ДЖЕРЕЛО РИТМУ (DSP)</span>
+          <label class="toggle-pill" title="Вимкнути/увімкнути звук синтезатора">
+            <input type="checkbox" id="chkSynthAudio" checked />
+            <span>Звук біту</span>
+          </label>
+        </div>
+        <div class="source-pills" id="sourceContainer">
+          <button class="src-pill active" data-source="synth" tabindex="0">
+            🎹 Техно-Біт (Live)
+          </button>
+          <button class="src-pill" data-source="mic" tabindex="-1">
+            🎙️ Мікрофон Смартфона
+          </button>
+          <button class="src-pill" data-source="file" tabindex="-1">
+            🎵 Аудіофайл (MP3)
+          </button>
+          <button class="src-pill" data-source="screen" tabindex="-1">
+            💻 Системний звук
+          </button>
+        </div>
+        <input type="file" id="audioFileInput" accept="audio/*" hidden />
+      </div>
+
+      <!-- Сітка 3x2 неонових педів візуальних сцен -->
+      <div class="preset-grid" id="presetGrid" aria-label="Візуальні сцени">
+        <button class="vj-pad active" data-mode="lasers" tabindex="0">
+          <span class="pad-emoji">🟢</span>
+          <span class="pad-name">Laser Matrix</span>
+          <span class="pad-sub">Клубні промені</span>
+        </button>
+        <button class="vj-pad" data-mode="synthwave" tabindex="-1">
+          <span class="pad-emoji">🟣</span>
+          <span class="pad-name">3D Synthwave</span>
+          <span class="pad-sub">Аудіо-ландшафт</span>
+        </button>
+        <button class="vj-pad" data-mode="ferrofluid" tabindex="-1">
+          <span class="pad-emoji">🔵</span>
+          <span class="pad-name">Plasma Orb</span>
+          <span class="pad-sub">3D Феррофлюїд</span>
+        </button>
+        <button class="vj-pad" data-mode="tunnel" tabindex="-1">
+          <span class="pad-emoji">🟠</span>
+          <span class="pad-name">Cyber Tunnel</span>
+          <span class="pad-sub">Гіперпростір</span>
+        </button>
+        <button class="vj-pad" data-mode="liquid" tabindex="-1">
+          <span class="pad-emoji">🌈</span>
+          <span class="pad-name">Silk Fluid</span>
+          <span class="pad-sub">Неонова плазма</span>
+        </button>
+        <button class="vj-pad" data-mode="fractal" tabindex="-1">
+          <span class="pad-emoji">⚡</span>
+          <span class="pad-name">Kaleidoscope</span>
+          <span class="pad-sub">Фрактал-мандала</span>
+        </button>
+      </div>
+
+      <!-- Інтерактивний XY MORPH TOUCHPAD -->
+      <div class="xy-pad-wrapper">
+        <div class="xy-pad" id="xyPad">
+          <div class="xy-grid-lines"></div>
+          <span class="xy-axis-label top">ШВИДКІСТЬ / ЕНЕРГІЯ (Y)</span>
+          <span class="xy-axis-label bottom">ГЕОМЕТРІЯ / РОЗКРИТТЯ (X)</span>
+          <div class="xy-puck" id="xyPuck" style="left: 50%; top: 50%">
+            <div class="xy-puck-ring"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 КНОПКИ МИТТЄВИХ DJ-ЕФЕКТІВ (LIVE FX TRIGGERS) -->
+      <div class="fx-row" id="fxRow">
+        <button class="fx-btn strobe" id="fxStrobe">
+          <span class="fx-icon">⚡</span>
+          <span>STROBE</span>
+          <small>Утримуй</small>
+        </button>
+        <button class="fx-btn shockwave" id="fxShockwave">
+          <span class="fx-icon">💥</span>
+          <span>SHOCKWAVE</span>
+          <small>Вибух</small>
+        </button>
+        <button class="fx-btn freeze" id="fxFreeze">
+          <span class="fx-icon">❄️</span>
+          <span>FREEZE</span>
+          <small>Утримуй</small>
+        </button>
+        <button class="fx-btn colordrop" id="fxColorDrop">
+          <span class="fx-icon">🎨</span>
+          <span>COLOR DROP</span>
+          <small>Палітра</small>
+        </button>
+      </div>
+    </section>
+
+    <!-- Модальне вікно QR-підключення смартфона до проектора -->
+    <div class="qr-modal" id="qrModal" hidden>
+      <div class="qr-card">
+        <h3>📱 Підключення Смартфона</h3>
+        <p>
+          Відкрийте цю адресу на смартфоні в одній Wi-Fi мережі — телефон стане
+          <strong>VJ-пультом та бездротовим мікрофоном-сенсором</strong>:
+        </p>
+        <div class="qr-box" id="qrCodeBox"></div>
+        <code class="remote-url" id="remoteUrlText"></code>
+        <button class="close-modal-btn" id="btnCloseQr">Закрити</button>
+      </div>
+    </div>
+
+    <script src="dsp-engine.js"></script>
+    <script src="shader-visualizer.js"></script>
+    <script src="sync-manager.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

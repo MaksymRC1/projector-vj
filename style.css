@@ -1,0 +1,620 @@
+:root {
+  --bg-black: #000000;
+  --panel-bg: rgba(14, 15, 24, 0.85);
+  --card-bg: rgba(22, 24, 38, 0.78);
+  --border-glow: rgba(0, 245, 212, 0.28);
+  --neon-cyan: #00f5d4;
+  --neon-magenta: #ff2a85;
+  --neon-purple: #9b5de5;
+  --neon-amber: #fee440;
+  --text-main: #f4f6ff;
+  --text-muted: #8b92b2;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100dvh;
+  background: var(--bg-black);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ВЕРХНЯ ПАНЕЛЬ СТАТУСУ ТА ПЕРЕМИКАЧ РЕЖИМІВ */
+.top-bar {
+  height: 46px;
+  min-height: 46px;
+  padding: 0 12px;
+  background: rgba(6, 7, 12, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 50;
+  backdrop-filter: blur(12px);
+}
+
+.brand-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--neon-cyan);
+  box-shadow: 0 0 10px var(--neon-cyan);
+  transition: transform 0.06s ease-out, background-color 0.06s;
+}
+
+.pulse-dot.beat-hit {
+  transform: scale(1.75);
+  background: var(--neon-magenta);
+  box-shadow: 0 0 18px var(--neon-magenta);
+}
+
+.brand-title {
+  font-size: 0.92rem;
+  letter-spacing: 1.5px;
+  color: #fff;
+}
+
+.brand-title strong {
+  color: var(--neon-cyan);
+}
+
+.bpm-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 245, 212, 0.14);
+  border: 1px solid rgba(0, 245, 212, 0.4);
+  color: var(--neon-cyan);
+}
+
+.view-switcher {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 3px;
+  border-radius: 10px;
+}
+
+.view-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.view-btn.active {
+  background: rgba(0, 245, 212, 0.2);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(0, 245, 212, 0.25);
+}
+
+/* РЕЖИМИ ВІДОБРАЖЕННЯ (SPLIT / PROJECTOR / REMOTE) */
+body[data-view="split"] .projector-stage {
+  height: 36dvh;
+  min-height: 190px;
+}
+
+body[data-view="split"] .projector-dock {
+  display: none;
+}
+
+body[data-view="split"] .mobile-vj-deck {
+  flex: 1;
+  display: flex;
+}
+
+body[data-view="projector"] .projector-stage {
+  height: calc(100dvh - 46px);
+}
+
+body[data-view="projector"] .mobile-vj-deck {
+  display: none;
+}
+
+body[data-view="remote"] .projector-stage {
+  height: 76px;
+  min-height: 76px;
+}
+
+body[data-view="remote"] .projector-dock {
+  display: none;
+}
+
+body[data-view="remote"] .mobile-vj-deck {
+  flex: 1;
+  display: flex;
+}
+
+/* СЕКЦІЯ 1: ПРОЕКТОР ТА WEBGL СЦЕНА */
+.projector-stage {
+  position: relative;
+  width: 100%;
+  background: #000000;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(0, 245, 212, 0.18);
+}
+
+#shaderCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 4-СМУГОВИЙ DSP ІНДИКАТОР ЧАСТОТ */
+.dsp-telemetry-hud {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.band-meter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 22px;
+  height: 42px;
+  justify-content: flex-end;
+}
+
+.band-fill {
+  width: 10px;
+  height: 15%;
+  border-radius: 4px;
+  transition: height 0.04s linear;
+}
+
+.band-fill.sub {
+  background: #ff2a85;
+  box-shadow: 0 0 8px #ff2a85;
+}
+.band-fill.bass {
+  background: #9b5de5;
+  box-shadow: 0 0 8px #9b5de5;
+}
+.band-fill.mid {
+  background: #00f5d4;
+  box-shadow: 0 0 8px #00f5d4;
+}
+.band-fill.high {
+  background: #fee440;
+  box-shadow: 0 0 8px #fee440;
+}
+
+.band-meter span {
+  font-size: 0.52rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* APPLE TV STYLE DOCK НА ПРОЕКТОРІ */
+.projector-dock {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 20px;
+  background: rgba(15, 17, 28, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  max-width: 95vw;
+  overflow-x: auto;
+}
+
+.projector-dock.hud-hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(25px);
+  pointer-events: none;
+}
+
+.dock-item {
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-main);
+  border-radius: 14px;
+  padding: 8px 12px;
+  min-width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.dock-item.active,
+.dock-item:focus-visible {
+  background: rgba(0, 245, 212, 0.18);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 16px rgba(0, 245, 212, 0.35);
+  transform: translateY(-3px) scale(1.04);
+  outline: none;
+}
+
+.dock-icon {
+  font-size: 1.25rem;
+}
+
+.dock-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* СЕКЦІЯ 2: МОБІЛЬНИЙ ПУЛЬТ (OLED VJ CONTROLLER) */
+.mobile-vj-deck {
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 12px;
+  background: radial-gradient(circle at 50% 0%, rgba(26, 20, 56, 0.55), #050508 75%);
+  overflow-y: auto;
+}
+
+.deck-card {
+  background: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 8px 10px;
+}
+
+.strip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.strip-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+.toggle-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--neon-cyan);
+  cursor: pointer;
+}
+
+.source-pills {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.src-pill {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+  padding: 7px 4px;
+  border-radius: 9px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.src-pill.active,
+.src-pill:focus-visible {
+  background: rgba(0, 245, 212, 0.18);
+  border-color: var(--neon-cyan);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(0, 245, 212, 0.25);
+  outline: none;
+}
+
+/* СІТКА 3x2 ПЕДІВ ВІЗУАЛЬНИХ СЦЕН */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.vj-pad {
+  background: rgba(24, 27, 44, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 13px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.vj-pad.active,
+.vj-pad:focus-visible {
+  background: linear-gradient(145deg, rgba(0, 245, 212, 0.22), rgba(155, 93, 229, 0.22));
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 16px rgba(0, 245, 212, 0.32), inset 0 0 10px rgba(0, 245, 212, 0.15);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.pad-emoji {
+  font-size: 1.15rem;
+}
+
+.pad-name {
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.pad-sub {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+
+/* XY MORPH TOUCHPAD */
+.xy-pad-wrapper {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+}
+
+.xy-pad {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at center, rgba(155, 93, 229, 0.18), rgba(8, 10, 18, 0.95)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 245, 212, 0.06) 0px,
+      rgba(0, 245, 212, 0.06) 1px,
+      transparent 1px,
+      transparent 24px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 245, 212, 0.06) 0px,
+      rgba(0, 245, 212, 0.06) 1px,
+      transparent 1px,
+      transparent 24px
+    );
+  border: 1px solid rgba(0, 245, 212, 0.35);
+  box-shadow: inset 0 0 28px rgba(0, 245, 212, 0.12);
+  overflow: hidden;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.xy-axis-label {
+  position: absolute;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.xy-axis-label.top {
+  top: 7px;
+  left: 12px;
+}
+
+.xy-axis-label.bottom {
+  bottom: 7px;
+  right: 12px;
+}
+
+.xy-puck {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  margin-top: -17px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 15%, var(--neon-cyan) 60%, transparent 100%);
+  box-shadow: 0 0 22px var(--neon-cyan), 0 0 40px var(--neon-magenta);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.xy-puck-ring {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 245, 212, 0.65);
+  animation: ringPulse 1.4s infinite ease-out;
+}
+
+@keyframes ringPulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+/* 4 КНОПКИ ЖИВИХ DJ ЕФЕКТІВ */
+.fx-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+}
+
+.fx-btn {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 13px;
+  padding: 9px 4px;
+  background: rgba(20, 22, 34, 0.9);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: none;
+  transition: transform 0.08s, box-shadow 0.12s;
+}
+
+.fx-btn small {
+  font-size: 0.55rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.fx-icon {
+  font-size: 1.1rem;
+}
+
+.fx-btn.strobe {
+  border-color: rgba(254, 228, 64, 0.45);
+}
+.fx-btn.shockwave {
+  border-color: rgba(255, 42, 133, 0.45);
+}
+.fx-btn.freeze {
+  border-color: rgba(0, 245, 212, 0.45);
+}
+.fx-btn.colordrop {
+  border-color: rgba(155, 93, 229, 0.45);
+}
+
+.fx-btn.active,
+.fx-btn:active {
+  transform: scale(0.95);
+  background: rgba(255, 42, 133, 0.28);
+  box-shadow: 0 0 20px rgba(255, 42, 133, 0.6);
+}
+
+/* МОДАЛЬНЕ ВІКНО QR КОДУ */
+.qr-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(14px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.qr-modal[hidden] {
+  display: none;
+}
+
+.qr-card {
+  background: #121420;
+  border: 1px solid var(--neon-cyan);
+  border-radius: 20px;
+  padding: 24px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 0 40px rgba(0, 245, 212, 0.25);
+}
+
+.qr-card h3 {
+  margin-bottom: 10px;
+  color: var(--neon-cyan);
+}
+
+.qr-card p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-bottom: 16px;
+}
+
+.qr-box {
+  width: 190px;
+  height: 190px;
+  margin: 0 auto 14px;
+  background: #fff;
+  padding: 10px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-box img {
+  width: 100%;
+  height: 100%;
+}
+
+.remote-url {
+  display: block;
+  font-size: 0.76rem;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  color: var(--neon-cyan);
+  margin-bottom: 16px;
+  word-break: break-all;
+}
+
+.close-modal-btn {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: var(--neon-cyan);
+  color: #000;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 420px) {
+  .source-pills {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
