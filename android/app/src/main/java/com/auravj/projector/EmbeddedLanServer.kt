@@ -212,13 +212,13 @@ class EmbeddedLanServer(
                     val b3 = input.read()
                     val b4 = input.read()
                     if (b3 == -1 || b4 == -1) break
-                    len = ((b3 and 0xFF) shl 8) or (b4 and 0xFF).toLong()
+                    len = (((b3 and 0xFF) shl 8) or (b4 and 0xFF)).toLong()
                 } else if (len == 127L) {
                     val buf = ByteArray(8)
                     if (input.read(buf) != 8) break
                     len = 0L
                     for (i in 0 until 8) {
-                        len = (len shl 8) or (buf[i].toLong() and 0xFF)
+                        len = (len shl 8) or ((buf[i].toInt() and 0xFF).toLong())
                     }
                 }
 
