@@ -908,3 +908,14 @@ input[type="range"]::-webkit-slider-thumb {
   border-color: var(--neon-magenta);
   box-shadow: 0 0 14px rgba(255, 42, 133, 0.35);
 }
+
+.studio-link-pill {
+  text-decoration: none;
+  background: linear-gradient(135deg, rgba(255, 42, 133, 0.25), rgba(155, 93, 229, 0.28));
+  border-color: var(--neon-magenta);
+  color: #fff;
+}
+
+.custom-vj-pad {
+  border-color: rgba(255, 42, 133, 0.45);
+}

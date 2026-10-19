@@ -34,7 +34,7 @@ jobs:
       - name: Copy WebGL & DSP Assets into Android App
         run: |
           mkdir -p android/app/src/main/assets
-          cp index.html style.css dsp-engine.js shader-visualizer.js sync-manager.js app.js android/app/src/main/assets/
+          cp index.html studio.html style.css dsp-engine.js shader-visualizer.js sync-manager.js app.js studio.js android/app/src/main/assets/
 
       - name: Build Android Projector APK
         working-directory: ./android

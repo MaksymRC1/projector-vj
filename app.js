@@ -23,6 +23,7 @@ class AuraVJApp {
     this.setupMediaTop();
     this.setupXYPad();
     this.setupFXButtons();
+    this.loadSavedCustomEffects();
     this.setupSpatialNavigation();
     this.setupAutoHideHud();
 
@@ -736,16 +737,113 @@ class AuraVJApp {
     qrBox.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR Code для підключення смартфона" />`;
   }
 
+  loadSavedCustomEffects() {
+    const studioBtn = document.getElementById("btnOpenStudio");
+    if (studioBtn) {
+      studioBtn.href = `studio.html?room=${encodeURIComponent(this.sync.roomId)}`;
+    }
+    try {
+      const raw = localStorage.getItem("aura_vj_custom_effects");
+      const list = raw ? JSON.parse(raw) : [];
+      list.forEach((eff) => this.installCustomEffect(eff, false, false));
+    } catch {
+      // ignore
+    }
+  }
+
+  installCustomEffect(effect, activateNow = true, persist = true) {
+    if (!effect || !effect.id) return;
+    this.visualizer.registerCustomEffect(effect);
+
+    if (persist) {
+      try {
+        const raw = localStorage.getItem("aura_vj_custom_effects");
+        const list = raw ? JSON.parse(raw) : [];
+        const existingIdx = list.findIndex((item) => item.id === effect.id);
+        if (existingIdx !== -1) list[existingIdx] = effect;
+        else list.push(effect);
+        localStorage.setItem("aura_vj_custom_effects", JSON.stringify(list));
+      } catch {
+        // ignore
+      }
+    }
+
+    // 1. Додаємо або оновлюємо кнопку на пульті смартфона (#presetGrid)
+    const grid = document.getElementById("presetGrid");
+    if (grid) {
+      let pad = grid.querySelector(`[data-mode="${effect.id}"]`);
+      if (!pad) {
+        pad = document.createElement("button");
+        pad.className = "vj-pad custom-vj-pad";
+        pad.dataset.mode = effect.id;
+        pad.setAttribute("tabindex", "-1");
+        pad.addEventListener("click", () => {
+          this.visualizer.setMode(effect.id);
+          if (effect.postFx || effect.chopRouting) {
+            this.applyPatchState(effect);
+          }
+          this.highlightModeButtons(effect.id);
+          this.sync.send({ type: "installCustomEffect", effect });
+        });
+        grid.appendChild(pad);
+      }
+      pad.innerHTML = `
+        <span class="pad-emoji">${effect.emoji || "🧪"}</span>
+        <span class="pad-name">${effect.name || "Custom FX"}</span>
+        <span class="pad-sub">${effect.sub || "FX Studio"}</span>
+      `;
+    }
+
+    // 2. Додаємо або оновлюємо кнопку в док-панелі проектора (#projectorDock)
+    const dock = document.getElementById("projectorDock");
+    const qrBtn = document.getElementById("btnQrModal");
+    if (dock) {
+      let dockBtn = dock.querySelector(`[data-mode="${effect.id}"]`);
+      if (!dockBtn) {
+        dockBtn = document.createElement("button");
+        dockBtn.className = "dock-item";
+        dockBtn.dataset.mode = effect.id;
+        dockBtn.setAttribute("tabindex", "-1");
+        dockBtn.addEventListener("click", () => {
+          this.visualizer.setMode(effect.id);
+          if (effect.postFx || effect.chopRouting) {
+            this.applyPatchState(effect);
+          }
+          this.highlightModeButtons(effect.id);
+          this.sync.send({ type: "installCustomEffect", effect });
+        });
+        if (qrBtn) dock.insertBefore(dockBtn, qrBtn);
+        else dock.appendChild(dockBtn);
+      }
+      dockBtn.innerHTML = `
+        <span class="dock-icon">${effect.emoji || "🧪"}</span>
+        <span class="dock-label">${effect.name || "Custom FX"}</span>
+      `;
+    }
+
+    if (activateNow) {
+      this.visualizer.setMode(effect.id);
+      this.applyPatchState(effect);
+      this.highlightModeButtons(effect.id);
+    }
+  }
+
   handleSyncMessage(msg) {
     if (!msg || !msg.type) return;
     if (msg.type === "syncStatus") {
       const badge = document.getElementById("btnRoomBadge");
       const text = document.getElementById("roomCodeText");
+      const studioBtn = document.getElementById("btnOpenStudio");
       if (text && msg.roomId) text.textContent = msg.roomId;
       if (badge) badge.classList.toggle("online", !!msg.connected);
+      if (studioBtn && msg.roomId) {
+        studioBtn.href = `studio.html?room=${encodeURIComponent(msg.roomId)}`;
+      }
       return;
     }
-    if (msg.type === "mode") {
+    if (msg.type === "installCustomEffect" && msg.effect) {
+      this.installCustomEffect(msg.effect, true, true);
+    } else if (msg.type === "mode") {
       this.visualizer.setMode(msg.mode);
       this.highlightModeButtons(msg.mode);
     } else if (msg.type === "xy") {

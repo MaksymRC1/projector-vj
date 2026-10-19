@@ -75,10 +75,14 @@ class ShaderVisualizer {
     this.mediaElement = null;
     this.hasMedia = false;
 
+    // Динамічні користувацькі шейдери зі Студії Генерації (studio.html)
+    this.customSceneGlsl = "return sceneLasers(uv);";
+    this.customEffects = {};
+
     this.accumulatedTime = 0;
     this.lastTimestamp = performance.now();
 
-    this.initWebGL();
+    this.initWebGL(this.customSceneGlsl);
     this.initTrackedBlobs();
     this.setupResizeObserver();
   }
@@ -132,7 +136,7 @@ class ShaderVisualizer {
     }
   }
 
-  initWebGL() {
+  initWebGL(customGlsl = this.customSceneGlsl) {
     const gl = this.gl;
     if (!gl) return;
 
@@ -511,6 +515,11 @@ class ShaderVisualizer {
         return col;
       }
 
+      // 9+: DYNAMIC CUSTOM SCENE FROM FX LAB STUDIO (studio.html)
+      vec3 sceneCustom(vec2 uv) {
+        ${customGlsl}
+      }
+
       // Базовий рендер обраної сцени + медіа-шару (для підтримки RGB Split та Sobel Edges)
       vec3 evalSceneAndMedia(vec2 uv) {
         vec3 col = vec3(0.0);
@@ -522,7 +531,8 @@ class ShaderVisualizer {
         else if (u_mode == 5) col = sceneFractal(uv);
         else if (u_mode == 6) col = sceneBlobTrack(uv);
         else if (u_mode == 7) col = scenePointCloud(uv);
-        else col = sceneReaction(uv);
+        else if (u_mode == 8) col = sceneReaction(uv);
+        else col = sceneCustom(uv);
 
         // Змішування з власним Відео / Фото / Камерою (Media TOP)
         if (u_mediaMix > 0.01) {
@@ -657,10 +667,18 @@ class ShaderVisualizer {
 
     const vs = this.compileShader(gl.VERTEX_SHADER, vsSource);
     const fs = this.compileShader(gl.FRAGMENT_SHADER, fsSource);
-    this.program = gl.createProgram();
-    gl.attachShader(this.program, vs);
-    gl.attachShader(this.program, fs);
-    gl.linkProgram(this.program);
+    if (!vs || !fs) return false;
+
+    const newProgram = gl.createProgram();
+    gl.attachShader(newProgram, vs);
+    gl.attachShader(newProgram, fs);
+    gl.linkProgram(newProgram);
+    if (!gl.getProgramParameter(newProgram, gl.LINK_STATUS)) {
+      console.error("Program link error:", gl.getProgramInfoLog(newProgram));
+      return false;
+    }
+
+    this.program = newProgram;
     gl.useProgram(this.program);
 
     const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
@@ -672,24 +690,25 @@ class ShaderVisualizer {
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
 
-    // Створюємо WebGL текстуру для Відео / Фото / Камери
-    this.mediaTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, this.mediaTexture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.RGBA,
-      1,
-      1,
-      0,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      new Uint8Array([0, 0, 0, 255])
-    );
+    if (!this.mediaTexture) {
+      this.mediaTexture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, this.mediaTexture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        1,
+        1,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        new Uint8Array([0, 0, 0, 255])
+      );
+    }
 
     this.uniforms = {
       u_resolution: gl.getUniformLocation(this.program, "u_resolution"),
@@ -717,6 +736,7 @@ class ShaderVisualizer {
       u_mediaMix: gl.getUniformLocation(this.program, "u_mediaMix"),
       u_mediaMode: gl.getUniformLocation(this.program, "u_mediaMode"),
     };
+    return true;
   }
 
   compileShader(type, source) {
@@ -725,9 +745,32 @@ class ShaderVisualizer {
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      console.error("Shader compile error:", gl.getShaderInfoLog(shader));
+      this.lastShaderError = gl.getShaderInfoLog(shader);
+      console.error("Shader compile error:", this.lastShaderError);
+      return null;
     }
+    this.lastShaderError = null;
     return shader;
+  }
+
+  compileCustomScene(customGlsl) {
+    const ok = this.initWebGL(customGlsl);
+    if (ok) {
+      this.customSceneGlsl = customGlsl;
+    }
+    return ok;
+  }
+
+  registerCustomEffect(effect) {
+    if (!effect || !effect.id) return false;
+    this.customEffects[effect.id] = effect;
+    if (!this.modes.includes(effect.id)) {
+      this.modes.push(effect.id);
+    }
+    if (effect.glsl) {
+      this.compileCustomScene(effect.glsl);
+    }
+    return true;
   }
 
   setMode(modeNameOrIndex) {
@@ -735,7 +778,13 @@ class ShaderVisualizer {
       this.modeIndex = modeNameOrIndex % this.modes.length;
     } else {
       const idx = this.modes.indexOf(modeNameOrIndex);
-      if (idx !== -1) this.modeIndex = idx;
+      if (idx !== -1) {
+        this.modeIndex = idx;
+        const custom = this.customEffects[modeNameOrIndex];
+        if (custom && custom.glsl && custom.glsl !== this.customSceneGlsl) {
+          this.compileCustomScene(custom.glsl);
+        }
+      }
     }
   }
 

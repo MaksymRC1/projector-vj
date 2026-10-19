@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>AURA FX LAB — Студія Генерації Ефектів (TouchDesigner & Filmora)</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      body.studio-body {
+        overflow-y: auto;
+        height: 100dvh;
+        background: #06070c;
+      }
+
+      .studio-layout {
+        display: grid;
+        grid-template-columns: 1.15fr 1fr;
+        gap: 12px;
+        padding: 12px;
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+
+      @media (max-width: 900px) {
+        .studio-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .studio-left-col,
+      .studio-right-col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .preview-card {
+        position: relative;
+        height: 270px;
+        min-height: 220px;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(0, 245, 212, 0.35);
+        background: #000;
+        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.7);
+      }
+
+      .preview-card canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .preview-badge {
+        position: absolute;
+        top: 10px;
+        left: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(0, 245, 212, 0.4);
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: var(--neon-cyan);
+        z-index: 10;
+      }
+
+      /* TOUCHDESIGNER INTERACTIVE NODE GRAPH CANVAS */
+      .node-graph-card {
+        position: relative;
+        height: 230px;
+        min-height: 200px;
+        border-radius: 16px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at center, rgba(22, 28, 48, 0.8), #080910),
+          repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 20px),
+          repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 20px);
+        border: 1px solid rgba(155, 93, 229, 0.4);
+      }
+
+      #nodeGraphCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+        cursor: grab;
+      }
+
+      #nodeGraphCanvas:active {
+        cursor: grabbing;
+      }
+
+      .node-graph-header {
+        position: absolute;
+        top: 8px;
+        left: 12px;
+        right: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        pointer-events: none;
+      }
+
+      .node-graph-header span {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #d8b4fe;
+        background: rgba(8, 9, 16, 0.78);
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 1px solid rgba(155, 93, 229, 0.35);
+      }
+
+      .builder-section {
+        background: rgba(18, 20, 34, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 14px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .builder-title {
+        font-size: 0.74rem;
+        font-weight: 800;
+        letter-spacing: 0.8px;
+        color: var(--neon-cyan);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .template-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 7px;
+      }
+
+      @media (max-width: 500px) {
+        .template-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .tpl-btn {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 8px 6px;
+        color: var(--text-main);
+        font-size: 0.7rem;
+        font-weight: 700;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.15s;
+      }
+
+      .tpl-btn.active {
+        background: rgba(0, 245, 212, 0.2);
+        border-color: var(--neon-cyan);
+        box-shadow: 0 0 14px rgba(0, 245, 212, 0.28);
+      }
+
+      .meta-inputs-row {
+        display: grid;
+        grid-template-columns: 64px 1fr 1fr;
+        gap: 8px;
+      }
+
+      .studio-input {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 9px;
+        padding: 8px 10px;
+        color: #fff;
+        font-size: 0.8rem;
+        font-weight: 600;
+        user-select: text;
+      }
+
+      .glsl-editor {
+        width: 100%;
+        min-height: 115px;
+        background: #080a12;
+        color: #7ee787;
+        border: 1px solid rgba(0, 245, 212, 0.28);
+        border-radius: 10px;
+        padding: 10px;
+        font-family: "SF Mono", "JetBrains Mono", monospace;
+        font-size: 0.72rem;
+        line-height: 1.4;
+        resize: vertical;
+        user-select: text;
+      }
+
+      .deploy-btn {
+        width: 100%;
+        padding: 13px 16px;
+        border: none;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #00f5d4, #9b5de5, #ff2a85);
+        color: #fff;
+        font-size: 0.9rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        box-shadow: 0 6px 24px rgba(255, 42, 133, 0.4);
+        transition: transform 0.12s, box-shadow 0.15s;
+      }
+
+      .deploy-btn:active {
+        transform: scale(0.98);
+      }
+
+      .export-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .secondary-btn {
+        padding: 9px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-main);
+        font-size: 0.72rem;
+        font-weight: 700;
+        cursor: pointer;
+        text-align: center;
+      }
+
+      .status-toast {
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: var(--neon-cyan);
+        text-align: center;
+        min-height: 18px;
+      }
+    </style>
+  </head>
+  <body class="studio-body">
+    <header class="top-bar">
+      <div class="brand-status">
+        <span class="pulse-dot" id="studioBeatLed"></span>
+        <span class="brand-title">AURA <strong>FX LAB</strong></span>
+        <span class="bpm-pill" id="studioRoomPill">🔗 Кімната: ----</span>
+      </div>
+      <div class="view-switcher">
+        <a href="index.html" class="view-btn active" id="btnBackToStage" style="text-decoration: none">
+          ⬅️ На Пульт і Проектор
+        </a>
+      </div>
+    </header>
+
+    <main class="studio-layout">
+      <!-- ЛІВА КОЛОНКА: ЖИВИЙ 60 FPS ПРЕВ'Ю-МОНІТОР + TOUCHDESIGNER НОДОВИЙ ГРАФ -->
+      <div class="studio-left-col">
+        <div class="preview-card">
+          <span class="preview-badge" id="compileStatusBadge">✅ Live 60 FPS GPU Preview</span>
+          <canvas id="studioPreviewCanvas"></canvas>
+          <canvas id="studioOverlayCanvas" class="td-overlay-canvas"></canvas>
+        </div>
+
+        <div class="node-graph-card">
+          <div class="node-graph-header">
+            <span>🔌 TOUCHDESIGNER NODE NETWORK (Перетягуйте ноди пальцем/мишкою)</span>
+            <span id="activeNodeLabel">TOP: Voronoi Matrix</span>
+          </div>
+          <canvas id="nodeGraphCanvas"></canvas>
+        </div>
+
+        <!-- Заливка на Пульт та в APK -->
+        <div class="builder-section">
+          <div class="builder-title">
+            <span>🚀 ПУБЛІКАЦІЯ ЕФЕКТУ НА ПУЛЬТ ТА ПРОЕКТОР (APK)</span>
+          </div>
+          <div class="meta-inputs-row">
+            <input
+              type="text"
+              class="studio-input"
+              id="effEmoji"
+              value="💎"
+              maxlength="4"
+              title="Іконка ефекту"
+              style="text-align: center"
+            />
+            <input
+              type="text"
+              class="studio-input"
+              id="effName"
+              value="TD Voronoi"
+              maxlength="18"
+              placeholder="Назва на пульті"
+            />
+            <input
+              type="text"
+              class="studio-input"
+              id="effSub"
+              value="Клітинний неон"
+              maxlength="20"
+              placeholder="Підпис"
+            />
+          </div>
+
+          <button class="deploy-btn" id="btnPushToRemoteAndApk">
+            🚀 ЗАЛИТИ НА ПУЛЬТ І В APK ПРОЕКТОРА
+          </button>
+          <div class="status-toast" id="deployToast"></div>
+
+          <div class="export-row">
+            <button class="secondary-btn" id="btnExportJson">
+              📥 Завантажити .aurafx файл
+            </button>
+            <button class="secondary-btn" id="btnImportJson">
+              📤 Імпортувати .aurafx файл
+            </button>
+            <input type="file" id="importFxInput" accept=".aurafx,.json" hidden />
+          </div>
+        </div>
+      </div>
+
+      <!-- ПРАВА КОЛОНКА: ШАБЛОНИ ГЕНЕРАТОРІВ, ПАРАМЕТРИ ТА GLSL РЕДАКТОР -->
+      <div class="studio-right-col">
+        <div class="builder-section">
+          <div class="builder-title">
+            <span>1. БАЗОВИЙ ГЕНЕРАТОР (TOUCHDESIGNER GENERATOR TOP)</span>
+          </div>
+          <div class="template-grid" id="templateGrid">
+            <button class="tpl-btn active" data-tpl="voronoi">
+              🧬 Voronoi Клітини
+            </button>
+            <button class="tpl-btn" data-tpl="octahedron">
+              💎 3D Кібер-Октаедр
+            </button>
+            <button class="tpl-btn" data-tpl="matrix">
+              🟢 Матриця & Хвиля
+            </button>
+            <button class="tpl-btn" data-tpl="vortex">
+              🌀 Гіпно-Спіраль
+            </button>
+            <button class="tpl-btn" data-tpl="tesla">
+              ⚡ Блискавки Тесли
+            </button>
+            <button class="tpl-btn" data-tpl="lasers_custom">
+              🎆 Лазерний Приціл
+            </button>
+          </div>
+
+          <div class="fx-sliders-grid" style="margin-top: 4px">
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>📐 Щільність / Масштаб геометрії</span>
+                <strong id="lbl_paramScale">50%</strong>
+              </div>
+              <input type="range" id="paramScale" min="10" max="100" value="50" />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>⚡ Чутливість до Басу (Audio React)</span>
+                <strong id="lbl_paramAudio">75%</strong>
+              </div>
+              <input type="range" id="paramAudio" min="0" max="100" value="75" />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>✨ Яскравість неонового світіння (Bloom)</span>
+                <strong id="lbl_paramGlow">65%</strong>
+              </div>
+              <input type="range" id="paramGlow" min="10" max="100" value="65" />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>🎨 Зсув неонової палітри</span>
+                <strong id="lbl_paramPalette">20%</strong>
+              </div>
+              <input type="range" id="paramPalette" min="0" max="100" value="20" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Стек Filmora FX + TD CHOP для цього ефекту -->
+        <div class="builder-section">
+          <div class="builder-title">
+            <span>2. ШАРИ ПОСТ-ОБРОБКИ (FILMORA FX + TD BLOB CV)</span>
+            <label class="toggle-pill">
+              <input type="checkbox" id="studioBlobHud" />
+              <span>👁️ TD Рамки</span>
+            </label>
+          </div>
+
+          <div class="fx-sliders-grid">
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>🌈 RGB Split (на SUB-бас)</span>
+                <strong id="sval_rgbSplit">25%</strong>
+              </div>
+              <input type="range" class="studio-fx-range" data-fx="rgbSplit" min="0" max="100" value="25" />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>🔮 Калейдоскоп (Дзеркала)</span>
+                <strong id="sval_kaleido">0%</strong>
+              </div>
+              <input type="range" class="studio-fx-range" data-fx="kaleido" min="0" max="100" value="0" />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>🌊 Feedback Warp (Шлейф)</span>
+                <strong id="sval_feedback">20%</strong>
+              </div>
+              <input type="range" class="studio-fx-range" data-fx="feedback" min="0" max="100" value="20" />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>⚡ Neon Edges (Контури)</span>
+                <strong id="sval_edges">0%</strong>
+              </div>
+              <input type="range" class="studio-fx-range" data-fx="edges" min="0" max="100" value="0" />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>📼 VHS & Cyber Glitch</span>
+                <strong id="sval_glitch">0%</strong>
+              </div>
+              <input type="range" class="studio-fx-range" data-fx="glitch" min="0" max="100" value="0" />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>🟩 LED Matrix (Пікселі)</span>
+                <strong id="sval_pixelate">0%</strong>
+              </div>
+              <input type="range" class="studio-fx-range" data-fx="pixelate" min="0" max="100" value="0" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Живий редактор коду шейдера GLSL (TouchDesigner GLSL TOP) -->
+        <div class="builder-section">
+          <div class="builder-title">
+            <span>3. ЖИВИЙ GLSL ШЕЙДЕР-КОД (TOUCHDESIGNER GLSL TOP)</span>
+            <button class="mini-action-btn" id="btnCompileGlsl">▶️ Компілювати</button>
+          </div>
+          <textarea class="glsl-editor" id="glslEditor" spellcheck="false"></textarea>
+        </div>
+      </div>
+    </main>
+
+    <script src="dsp-engine.js"></script>
+    <script src="shader-visualizer.js"></script>
+    <script src="sync-manager.js"></script>
+    <script src="studio.js"></script>
+  </body>
+</html>
