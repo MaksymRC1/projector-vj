@@ -544,6 +544,19 @@ class AuraVJApp {
     const btnFreeze = document.getElementById("fxFreeze");
     const btnColorDrop = document.getElementById("fxColorDrop");
 
+    // Блокуємо виділення тексту та системне меню iOS Safari при утриманні тактильних клавіш
+    document.addEventListener("selectstart", (e) => {
+      if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+      }
+    });
+
+    [btnStrobe, btnShockwave, btnFreeze, btnColorDrop].forEach((btn) => {
+      if (!btn) return;
+      btn.addEventListener("contextmenu", (e) => e.preventDefault());
+      btn.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+    });
+
     const setStrobe = (active) => {
       this.visualizer.fx.strobe = active;
       btnStrobe.classList.toggle("active", active);
@@ -551,11 +564,16 @@ class AuraVJApp {
     };
     btnStrobe.addEventListener("pointerdown", (e) => {
       e.preventDefault();
+      try {
+        btnStrobe.setPointerCapture(e.pointerId);
+      } catch {}
       setStrobe(true);
     });
     btnStrobe.addEventListener("pointerup", () => setStrobe(false));
     btnStrobe.addEventListener("pointerleave", () => setStrobe(false));
     btnStrobe.addEventListener("pointercancel", () => setStrobe(false));
+    btnStrobe.addEventListener("touchend", () => setStrobe(false));
+    btnStrobe.addEventListener("touchcancel", () => setStrobe(false));
 
     const setFreeze = (active) => {
       this.visualizer.fx.freeze = active;
@@ -564,11 +582,16 @@ class AuraVJApp {
     };
     btnFreeze.addEventListener("pointerdown", (e) => {
       e.preventDefault();
+      try {
+        btnFreeze.setPointerCapture(e.pointerId);
+      } catch {}
       setFreeze(true);
     });
     btnFreeze.addEventListener("pointerup", () => setFreeze(false));
     btnFreeze.addEventListener("pointerleave", () => setFreeze(false));
     btnFreeze.addEventListener("pointercancel", () => setFreeze(false));
+    btnFreeze.addEventListener("touchend", () => setFreeze(false));
+    btnFreeze.addEventListener("touchcancel", () => setFreeze(false));
 
     btnShockwave.addEventListener("pointerdown", (e) => {
       e.preventDefault();
