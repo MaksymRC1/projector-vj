@@ -102,6 +102,7 @@ class MainActivity : AppCompatActivity() {
 
         loadBestAvailableSource()
         checkAndStartSystemAudio()
+        checkForUpdatesOnStartup()
     }
 
     private fun getServerHost(): String {
@@ -205,26 +206,75 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Автоматична перевірка наявності свіжих релізів на GitHub при старті додатка
+     */
+    private fun checkForUpdatesOnStartup() {
+        thread(name = "AuraApkUpdateChecker") {
+            try {
+                Thread.sleep(6000) // Чекаємо 6с після запуску, щоб не заважати старту WebGL
+                val apiUrl = "https://api.github.com/repos/MaksymRC1/projector-vj/releases/latest"
+                val url = URL(apiUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                conn.setRequestProperty("User-Agent", "AuraVJ-Projector/2.7")
+                if (conn.responseCode in 200..299) {
+                    val body = conn.inputStream.bufferedReader().readText()
+                    if (body.contains("aura-vj-projector.apk")) {
+                        runOnUiThread {
+                            // Сповіщаємо веб-інтерфейс та показуємо ненав'язливу підказку
+                            webView.evaluateJavascript("window.onApkUpdateAvailable && window.onApkUpdateAvailable();", null)
+                        }
+                    }
+                }
+                conn.disconnect()
+            } catch (e: Exception) {
+                // Відсутність інтернету або помилка GitHub API не заважає локальній роботі
+            }
+        }
+    }
+
+    /**
      * Оновлення APK безпосередньо всередині додатка без комп'ютера чи флешки
      */
     private fun downloadAndInstallApkUpdate() {
         Toast.makeText(this, "⬇️ Завантаження оновлення AURA VJ...", Toast.LENGTH_LONG).show()
 
         val host = getServerHost()
-        // Спочатку шукаємо APK на локальному сервері, якщо немає — на GitHub Releases
         val localApkUrl = "http://$host/aura-vj-projector.apk"
         val githubApkUrl = "https://github.com/MaksymRC1/projector-vj/releases/download/v1.0.0/aura-vj-projector.apk"
 
-        thread {
+        thread(name = "AuraApkDownloader") {
             var downloadUrl = if (checkUrlReachable(localApkUrl)) localApkUrl else githubApkUrl
             try {
-                val url = URL(downloadUrl)
-                val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = 10000
-                conn.readTimeout = 30000
-                conn.connect()
+                var conn: HttpURLConnection
+                var currentUrl = downloadUrl
+                var redirects = 0
 
-                if (conn.responseCode !in 200..399) {
+                // GitHub Releases завжди роздає файли через HTTP 302 на AWS S3 (objects.githubusercontent.com)
+                while (true) {
+                    val url = URL(currentUrl)
+                    conn = url.openConnection() as HttpURLConnection
+                    conn.instanceFollowRedirects = true
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 60000
+                    conn.setRequestProperty("User-Agent", "AuraVJ-Projector/2.7")
+                    conn.connect()
+
+                    val code = conn.responseCode
+                    if (code in listOf(301, 302, 303, 307, 308) && redirects < 5) {
+                        val newLocation = conn.getHeaderField("Location")
+                        conn.disconnect()
+                        if (newLocation != null) {
+                            currentUrl = newLocation
+                            redirects++
+                            continue
+                        }
+                    }
+                    break
+                }
+
+                if (conn.responseCode !in 200..299) {
                     runOnUiThread {
                         Toast.makeText(this, "Помилка сервера завантаження: ${conn.responseCode}", Toast.LENGTH_SHORT).show()
                     }
@@ -238,15 +288,25 @@ class MainActivity : AppCompatActivity() {
                 val output = FileOutputStream(apkFile)
                 val buffer = ByteArray(8192)
                 var bytesRead: Int
+                var totalBytes = 0
                 while (input.read(buffer).also { bytesRead = it } != -1) {
                     output.write(buffer, 0, bytesRead)
+                    totalBytes += bytesRead
                 }
                 output.flush()
                 output.close()
                 input.close()
+                conn.disconnect()
+
+                if (totalBytes < 100000) {
+                    runOnUiThread {
+                        Toast.makeText(this, "Помилка: файл оновлення пошкоджено ($totalBytes байт)", Toast.LENGTH_LONG).show()
+                    }
+                    return@thread
+                }
 
                 runOnUiThread {
-                    Toast.makeText(this, "✅ Завантажено! Запуск встановлення...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "✅ Завантажено (${totalBytes / 1024} КБ)! Запуск встановлення...", Toast.LENGTH_SHORT).show()
                     launchApkInstaller(apkFile)
                 }
             } catch (e: Exception) {

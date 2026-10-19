@@ -1266,6 +1266,45 @@ class AuraVJApp {
       btnFloatingRestore.addEventListener("click", () => this.setProjectorHudCollapsed(false, true));
     }
 
+    const btnRemoteUpdate = document.getElementById("btnRemoteUpdateApk");
+    if (btnRemoteUpdate) {
+      btnRemoteUpdate.addEventListener("click", () => {
+        if (
+          confirm(
+            "Запустити оновлення AURA VJ на проекторі?\n\nПроектор завантажить оновлений APK з GitHub Releases і відкриє встановлення."
+          )
+        ) {
+          if (
+            window.AndroidAudioBridge &&
+            typeof window.AndroidAudioBridge.updateApk === "function"
+          ) {
+            window.AndroidAudioBridge.updateApk();
+          } else {
+            this.sync.send({ type: "triggerApkUpdate" });
+          }
+        }
+      });
+    }
+
+    const btnBannerUpdate = document.getElementById("btnBannerUpdateApk");
+    if (btnBannerUpdate) {
+      btnBannerUpdate.addEventListener("click", () => {
+        if (
+          window.AndroidAudioBridge &&
+          typeof window.AndroidAudioBridge.updateApk === "function"
+        ) {
+          window.AndroidAudioBridge.updateApk();
+        }
+      });
+    }
+
+    window.onApkUpdateAvailable = () => {
+      const banner = document.getElementById("apkUpdateBanner");
+      if (banner) banner.style.display = "flex";
+      const btnNative = document.getElementById("btnUpdateApkNative");
+      if (btnNative) btnNative.style.display = "block";
+    };
+
     // На проекторі: якщо меню згорнуто, при русі миші чи дотику показуємо плаваючу кнопку відновлення на 3.5 с
     let restoreTimeout = null;
     const showRestorePill = () => {
@@ -1843,6 +1882,13 @@ class AuraVJApp {
       }
     } else if (msg.type === "setProjectorHud") {
       this.setProjectorHudCollapsed(!!msg.collapsed, false);
+    } else if (msg.type === "triggerApkUpdate") {
+      if (
+        window.AndroidAudioBridge &&
+        typeof window.AndroidAudioBridge.updateApk === "function"
+      ) {
+        window.AndroidAudioBridge.updateApk();
+      }
     } else if (msg.type === "proStatus") {
       this.setProStatus(!!msg.isPro, false);
     } else if (msg.type === "venueKeystone") {

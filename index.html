@@ -284,6 +284,15 @@
         </svg>
         <span>РОЗГОРНУТИ МЕНЮ</span>
       </button>
+
+      <!-- Сповіщення про наявність оновлення APK -->
+      <div class="apk-update-banner" id="apkUpdateBanner">
+        <div class="apk-update-text">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <span>Доступне оновлення AURA VJ!</span>
+        </div>
+        <button class="btn-banner-update" id="btnBannerUpdateApk">ОНОВИТИ ⬇️</button>
+      </div>
     </section>
 
     <!-- СЕКЦІЯ 2: PRO STUDIO CONTROLLER DECK -->
@@ -297,18 +306,31 @@
             <span class="remote-bar-sub" id="txtRemoteProjectorHudState">Меню видимі</span>
           </div>
         </div>
-        <button
-          class="btn-toggle-hud-remote"
-          id="btnRemoteToggleHud"
-          type="button"
-          title="Згорнути/розгорнути верхнє та нижнє меню на проекторі"
-        >
-          <svg class="ico" id="icoRemoteHud" viewBox="0 0 24 24">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          <span id="lblRemoteToggleHud">Згорнути меню</span>
-        </button>
+        <div class="remote-bar-actions">
+          <button
+            class="btn-toggle-hud-remote"
+            id="btnRemoteToggleHud"
+            type="button"
+            title="Згорнути/розгорнути верхнє та нижнє меню на проекторі"
+          >
+            <svg class="ico" id="icoRemoteHud" viewBox="0 0 24 24">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span id="lblRemoteToggleHud">Згорнути меню</span>
+          </button>
+          <button
+            class="btn-apk-update-remote"
+            id="btnRemoteUpdateApk"
+            type="button"
+            title="Запустити оновлення APK на проекторі з телефону"
+          >
+            <svg class="ico" viewBox="0 0 24 24">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            <span>Оновити APK</span>
+          </button>
+        </div>
       </div>
 
       <!-- Банер швидкого підключення мікрофона для мобільного пульта -->
