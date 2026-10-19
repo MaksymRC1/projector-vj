@@ -4,12 +4,14 @@
  * Запуск: node server.js
  */
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const os = require("os");
 
 const PORT = process.env.PORT || 3456;
+const HTTPS_PORT = process.env.HTTPS_PORT || 3457;
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -24,7 +26,7 @@ const MIME_TYPES = {
 
 const clients = new Set();
 
-const server = http.createServer((req, res) => {
+function handleHttpRequest(req, res) {
   const urlPath = req.url.split("?")[0];
 
   // API endpoint для перевірки статусу та версії сервера
@@ -37,7 +39,8 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       version: "2.7.0",
       ip: getLocalIp(),
-      port: PORT,
+      httpPort: PORT,
+      httpsPort: HTTPS_PORT,
       timestamp: Date.now(),
     }));
     return;
@@ -66,7 +69,9 @@ const server = http.createServer((req, res) => {
     });
     res.end(content);
   });
-});
+}
+
+const server = http.createServer(handleHttpRequest);
 
 // Легка реалізація RFC 6455 WebSocket поверх чистого Node.js net.Socket
 function encodeWsFrame(str) {
@@ -139,7 +144,7 @@ function decodeWsFrames(buffer) {
   return { close: false, messages, consumed: offset };
 }
 
-server.on("upgrade", (req, socket) => {
+function handleWsUpgrade(req, socket) {
   if (req.headers["upgrade"] !== "websocket") {
     socket.end("HTTP/1.1 400 Bad Request");
     return;
@@ -200,7 +205,27 @@ server.on("upgrade", (req, socket) => {
   };
   socket.on("close", cleanup);
   socket.on("error", cleanup);
-});
+}
+
+server.on("upgrade", handleWsUpgrade);
+
+// Ініціалізація HTTPS сервера для iPhone Safari Secure Context (мікрофон на смартфоні)
+let httpsServer = null;
+const keyPath = path.join(__dirname, "cert", "key.pem");
+const certPath = path.join(__dirname, "cert", "cert.pem");
+
+if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+  try {
+    const httpsOptions = {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath),
+    };
+    httpsServer = https.createServer(httpsOptions, handleHttpRequest);
+    httpsServer.on("upgrade", handleWsUpgrade);
+  } catch (err) {
+    console.warn("⚠️ Помилка створення HTTPS сервера:", err.message);
+  }
+}
 
 function getLocalIp() {
   const nets = os.networkInterfaces();
@@ -215,12 +240,22 @@ function getLocalIp() {
 }
 
 if (require.main === module) {
+  const ip = getLocalIp();
+
   server.listen(PORT, "0.0.0.0", () => {
-    const ip = getLocalIp();
-    console.log(`\n🚀 AURA VJ Server запущено!`);
-    console.log(`📽️ Екран Проектора / Split: http://${ip}:${PORT}`);
-    console.log(`📱 Пульт Смартфона:         http://${ip}:${PORT}/?view=remote\n`);
+    console.log(`\n🚀 AURA VJ LAN Server запущено!`);
+    console.log(`📽️ Екран Проектора / Smart TV (HTTP):  http://${ip}:${PORT}/?view=projector`);
+    console.log(`🎛️ VJ Студія на комп'ютері:           http://${ip}:${PORT}/?view=split`);
+
+    if (httpsServer) {
+      httpsServer.listen(HTTPS_PORT, "0.0.0.0", () => {
+        console.log(`📱 Пульт Смартфона (HTTPS Мікрофон):  https://${ip}:${HTTPS_PORT}/?view=remote`);
+        console.log(`⚡ Миттєва передача аудіо/ритму по Wi-Fi з iPhone & Android (< 1ms)\n`);
+      });
+    } else {
+      console.log(`📱 Пульт Смартфона (HTTP):            http://${ip}:${PORT}/?view=remote\n`);
+    }
   });
 }
 
-module.exports = server;
+module.exports = { server, httpsServer };

@@ -177,8 +177,22 @@ class AuraVJApp {
       const banner = document.getElementById("micStartBanner");
       if (banner && (actualSource === "mic" || this.currentView === "remote")) {
         banner.classList.add("active");
+        const btn = document.getElementById("btnStartRemoteMic");
+        if (btn && actualSource === "mic") {
+          btn.textContent = "ТРАНСЛЮЄТЬСЯ 🟢";
+        }
       }
     } catch (err) {
+      if (err && err.isHttpsRequired && err.targetUrl) {
+        if (
+          confirm(
+            "Для доступу до мікрофона на iPhone / Android потрібне захищене з'єднання (HTTPS).\n\nПерейти на HTTPS (порт 3457) прямо зараз?"
+          )
+        ) {
+          window.location.href = err.targetUrl;
+          return;
+        }
+      }
       alert(`Увага: ${err.message}. Перемикаємо на вбудований Техно-Синтезатор.`);
       const res = await this.dsp.start("synth");
       if (res && res.aborted) return;
@@ -258,13 +272,34 @@ class AuraVJApp {
 
     // Банер швидкого увімкнення мікрофона на пульті смартфона (без подвійного спрацювання)
     const micBanner = document.getElementById("micStartBanner");
-    const activateMicHandler = async (e) => {
-      if (e) e.stopPropagation();
-      this.highlightSourceButton("mic");
-      await this.ensureAudioStarted("mic");
-      if (micBanner) micBanner.classList.add("active");
-    };
-    if (micBanner) micBanner.addEventListener("click", activateMicHandler);
+    const btnStartRemoteMic = document.getElementById("btnStartRemoteMic");
+
+    if (micBanner) {
+      if (!window.isSecureContext && location.protocol === "http:") {
+        const bannerText = micBanner.querySelector(".mic-start-texts span");
+        if (bannerText) {
+          bannerText.textContent = "Натисніть для переходу на HTTPS (порт 3457) для роботи мікрофона";
+        }
+        if (btnStartRemoteMic) {
+          btnStartRemoteMic.textContent = "HTTPS 3457 🔒";
+        }
+      }
+
+      const activateMicHandler = async (e) => {
+        if (e) e.stopPropagation();
+        if (!window.isSecureContext && location.protocol === "http:") {
+          window.location.href = `https://${location.hostname}:3457${location.pathname}${location.search}`;
+          return;
+        }
+        this.highlightSourceButton("mic");
+        await this.ensureAudioStarted("mic");
+        if (micBanner) micBanner.classList.add("active");
+        if (btnStartRemoteMic) btnStartRemoteMic.textContent = "ТРАНСЛЮЄТЬСЯ 🟢";
+      };
+
+      micBanner.addEventListener("click", activateMicHandler);
+      if (btnStartRemoteMic) btnStartRemoteMic.addEventListener("click", activateMicHandler);
+    }
 
     fileInput.addEventListener("change", async (e) => {
       const file = e.target.files[0];
@@ -1415,10 +1450,23 @@ class AuraVJApp {
   }
 
   renderQrModal() {
-    const host = this.sync.serverHost || "192.168.0.40:3456";
-    const remoteUrl = `http://${host}/?view=remote&room=${encodeURIComponent(this.sync.roomId)}`;
+    const rawHost = this.sync.serverHost || (location.host || "192.168.0.40:3456");
+    const ip = rawHost.split(":")[0];
+    const httpsHost = `${ip}:3457`;
+    const httpHost = `${ip}:3456`;
+
+    // Для пульта смартфона формуємо HTTPS посилання (порт 3457) для роботи мікрофона в Safari/Chrome
+    const remoteUrl = `https://${httpsHost}/?view=remote&room=${encodeURIComponent(this.sync.roomId)}`;
+    const projectorUrl = `http://${httpHost}/?view=projector&room=${encodeURIComponent(this.sync.roomId)}`;
+
     const remoteUrlEl = document.getElementById("remoteUrlText");
-    if (remoteUrlEl) remoteUrlEl.textContent = remoteUrl;
+    if (remoteUrlEl) {
+      remoteUrlEl.innerHTML = `
+        <div style="margin-bottom:6px;"><strong>📱 Пульт (iPhone/Android з мікрофоном):</strong></div>
+        <div style="word-break:break-all;color:var(--neon);font-family:monospace;font-size:12px;margin-bottom:8px;">${remoteUrl}</div>
+        <div style="opacity:0.75;font-size:11px;">📽️ Екран (Smart TV / Проектор): <code>${projectorUrl}</code></div>
+      `;
+    }
     const roomInput = document.getElementById("roomInput");
     if (roomInput) roomInput.value = this.sync.roomId;
     const qrBox = document.getElementById("qrCodeBox");

@@ -144,6 +144,22 @@ class DSPEngine {
     this.waveData = new Uint8Array(this.analyser.frequencyBinCount);
 
     if (sourceType === "mic") {
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+        if (!window.isSecureContext && location.protocol === "http:") {
+          const httpsPort = 3457;
+          const targetUrl = `https://${location.hostname}:${httpsPort}${location.pathname}${location.search}`;
+          const err = new Error(
+            `iOS Safari та Chrome вимагають безпечного HTTPS з'єднання для доступу до мікрофона. Перейдіть на HTTPS (порт ${httpsPort}): ${targetUrl}`
+          );
+          err.isHttpsRequired = true;
+          err.targetUrl = targetUrl;
+          throw err;
+        }
+        throw new Error(
+          "Мікрофон не підтримується у цьому браузері або заблокований налаштуваннями конфіденційності."
+        );
+      }
+
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
