@@ -48,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private var visualizer: Visualizer? = null
     private val AUDIO_PERMISSION_REQ = 1001
 
+    private var embeddedServer: EmbeddedLanServer? = null
     private lateinit var prefs: SharedPreferences
     private val PREF_KEY_SERVER_HOST = "server_host"
     private val DEFAULT_SERVER_HOST = "192.168.0.40:3456"
@@ -57,6 +58,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         prefs = getSharedPreferences("aura_vj_prefs", Context.MODE_PRIVATE)
+
+        // Запускаємо автономний локальний WebSocket сервер на проекторі (порт 3456)
+        embeddedServer = EmbeddedLanServer(this, 3456)
+        embeddedServer?.start()
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemUI()
@@ -80,10 +85,9 @@ class MainActivity : AppCompatActivity() {
                 description: String?,
                 failingUrl: String?
             ) {
-                // Якщо локальний сервер недоступний — перемикаємось на офлайн ассети
-                if (failingUrl != null && !failingUrl.startsWith("file:///android_asset")) {
-                    view?.loadUrl("file:///android_asset/index.html?view=projector")
-                }
+                // Якщо зовнішній сервер недоступний — відкриваємо власний вбудований сервер проектора
+                val myIp = getLocalIpAddress()
+                view?.loadUrl("http://localhost:3456/?view=projector&lan=$myIp:3456")
             }
         }
 
@@ -95,9 +99,7 @@ class MainActivity : AppCompatActivity() {
 
         webView.addJavascriptInterface(AndroidAudioBridge(), "AndroidAudioBridge")
 
-        // Завантажуємо найкраще доступне джерело (LAN Server -> GitHub Live -> Offline Asset)
         loadBestAvailableSource()
-
         checkAndStartSystemAudio()
     }
 
@@ -112,35 +114,45 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Автоматичне визначення джерела:
-     * 1. Якщо запущено node server.js на комп'ютері — вантажимо прямо з нього (0 ms затримки).
-     * 2. Якщо сервер вимкнено, але є інтернет — вантажимо свіжу версію з GitHub.
-     * 3. Якщо інтернету немає взагалі — вантажимо вбудований офлайн-ассет.
+     * 1. Якщо запущено сервер на ноутбуці — підключаємось до нього.
+     * 2. Якщо ноутбука немає — працює власний автономний сервер проектора (телефон підключається прямо до проектора!).
      */
     private fun loadBestAvailableSource() {
         val host = getServerHost()
+        val myIp = getLocalIpAddress()
         thread {
-            val lanUrl = "http://$host/?view=projector"
-            val isLanReachable = checkUrlReachable("http://$host/")
+            val isCustomServer = host != DEFAULT_SERVER_HOST && host != "$myIp:3456" && host != "localhost:3456"
+            val isLaptopReachable = if (isCustomServer) checkUrlReachable("http://$host/") else checkUrlReachable("http://$DEFAULT_SERVER_HOST/")
 
             runOnUiThread {
-                if (isLanReachable) {
-                    Toast.makeText(this, "⚡ Підключено до LAN: $host", Toast.LENGTH_SHORT).show()
-                    webView.loadUrl(lanUrl)
+                if (isLaptopReachable) {
+                    val activeHost = if (isCustomServer) host else DEFAULT_SERVER_HOST
+                    Toast.makeText(this, "⚡ Підключено до комп'ютера: $activeHost", Toast.LENGTH_SHORT).show()
+                    webView.loadUrl("http://$activeHost/?view=projector")
                 } else {
-                    thread {
-                        val githubUrl = "https://maksymrc1.github.io/projector-vj/index.html?view=projector&lan=$host"
-                        val isOnlineReachable = checkUrlReachable("https://maksymrc1.github.io/projector-vj/index.html")
-                        runOnUiThread {
-                            if (isOnlineReachable) {
-                                webView.loadUrl(githubUrl)
-                            } else {
-                                webView.loadUrl("file:///android_asset/index.html?view=projector")
-                            }
-                        }
-                    }
+                    Toast.makeText(this, "📽️ Сервер проектора активний: $myIp:3456", Toast.LENGTH_LONG).show()
+                    webView.loadUrl("http://localhost:3456/?view=projector&lan=$myIp:3456")
                 }
             }
         }
+    }
+
+    private fun getLocalIpAddress(): String {
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                val addresses = iface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val addr = addresses.nextElement()
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        val hostAddr = addr.hostAddress ?: ""
+                        if (hostAddr.isNotEmpty()) return hostAddr
+                    }
+                }
+            }
+        } catch (e: Exception) {}
+        return "127.0.0.1"
     }
 
     private fun checkUrlReachable(targetUrl: String): Boolean {
@@ -183,6 +195,9 @@ class MainActivity : AppCompatActivity() {
         fun updateApk() {
             runOnUiThread { downloadAndInstallApkUpdate() }
         }
+
+        @JavascriptInterface
+        fun getProjectorIp(): String = this@MainActivity.getLocalIpAddress()
 
         @JavascriptInterface
         fun getAppVersion(): String = "2.7.0"
@@ -393,6 +408,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        embeddedServer?.stop()
+        embeddedServer = null
         visualizer?.release()
         visualizer = null
         super.onDestroy()

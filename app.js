@@ -192,6 +192,12 @@ class AuraVJApp {
     if (roomTextEl) roomTextEl.textContent = this.sync.roomId;
 
     if (window.AndroidAudioBridge) {
+      if (typeof window.AndroidAudioBridge.getProjectorIp === "function") {
+        const projIp = window.AndroidAudioBridge.getProjectorIp();
+        if (projIp && projIp !== "127.0.0.1") {
+          this.sync.setServerHost(`${projIp}:3456`);
+        }
+      }
       this.ensureAudioStarted("native_android");
     }
 
