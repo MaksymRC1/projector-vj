@@ -113,42 +113,82 @@ class ShaderVisualizer {
         return fract(p.x * p.y);
       }
 
-      // 0: LASER MATRIX & VOLUMETRIC CLUB BEAMS
+      // 0: GALVO LASER MATRIX, DIFFRACTION STARS & COSMIC NEBULA (як на DJ-проекторі)
+      float sdSegment(vec2 p, vec2 a, vec2 b) {
+        vec2 pa = p - a, ba = b - a;
+        float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+        return length(pa - ba * h);
+      }
+
       vec3 sceneLasers(vec2 uv) {
         vec3 col = vec3(0.0);
-        float spread = 0.4 + u_xy.x * 1.4;
-        float speed = 0.6 + u_xy.y * 1.5;
+        float spread = 0.45 + u_xy.x * 1.35;
+        float speed = 0.65 + u_xy.y * 1.5;
 
-        // Верхній і нижній лазерні проектори
-        for (float i = -6.0; i <= 6.0; i += 1.0) {
-          float angle = i * 0.14 * spread + sin(u_time * speed + i * 0.6) * (0.25 + u_mid * 0.4);
-          // Стрибок кута на кожен біт
-          angle += sin(u_beatCount * 1.7 + i) * 0.18 * u_beatIntensity;
+        // 1. Космічна лазерна туманність (Red/Magenta & Emerald Nebula Cloud як у DJ)
+        vec2 nebUv = uv * rot(u_time * 0.08);
+        float n1 = sin(nebUv.x * 3.2 + u_time * 0.4) * cos(nebUv.y * 2.8 - u_time * 0.3);
+        float n2 = sin(nebUv.x * 6.5 - nebUv.y * 5.2 + u_time * 0.7);
+        float nebulaMask = smoothstep(-0.2, 0.85, n1 * 0.6 + n2 * 0.4) * exp(-length(uv) * 1.15);
+        vec3 nebRed = vec3(0.95, 0.05, 0.28) * smoothstep(0.0, 0.7, n1);
+        vec3 nebGreen = vec3(0.0, 0.95, 0.35) * smoothstep(0.1, 0.8, n2);
+        col += (nebRed * (0.18 + u_bass * 0.32) + nebGreen * (0.12 + u_mid * 0.25)) * nebulaMask;
 
-          vec2 origin = vec2(0.0, 0.85);
+        // 2. Зелена дифракційна зоряна решітка (Laser Starfield Dots)
+        vec2 starUv = uv * rot(-u_time * 0.05) * (14.0 + u_xy.x * 8.0);
+        vec2 starId = floor(starUv);
+        vec2 starF = fract(starUv) - 0.5;
+        float sh = hash21(starId);
+        if (sh > 0.68) {
+          vec2 starOffset = vec2(fract(sh * 13.7) - 0.5, fract(sh * 29.3) - 0.5) * 0.6;
+          float starDist = length(starF - starOffset);
+          float twinkle = 0.5 + 0.5 * sin(u_time * 6.0 + sh * 50.0);
+          float starGlow = (0.0025 * (0.4 + u_high * 1.6) * twinkle) / (starDist * starDist + 0.0015);
+          vec3 starCol = (sh > 0.91) ? vec3(1.0, 0.15, 0.35) : vec3(0.1, 1.0, 0.35);
+          col += starCol * starGlow * 0.16;
+        }
+
+        // 3. Galvo X-Y Скануючі Лазерні Фігури з яскравими вузловими точками на кінцях
+        for (float i = 0.0; i < 6.0; i += 1.0) {
+          float phase = u_time * speed * 0.9 + i * 1.047 + floor(u_beatCount) * 0.55;
+          vec2 pA = vec2(
+            sin(phase * 1.3 + i) * (0.55 + u_bass * 0.25) * spread,
+            cos(phase * 0.9 - i * 0.7) * (0.42 + u_subBass * 0.2)
+          );
+          vec2 pB = vec2(
+            sin(phase * 0.8 - i * 1.4 + 1.5) * (0.6 + u_mid * 0.25) * spread,
+            cos(phase * 1.5 + i * 1.1) * (0.45 + u_bass * 0.2)
+          );
+
+          float segDist = sdSegment(uv, pA, pB);
+          // Гострий лазерний промінь
+          float laserLine = (0.0016 + u_subBass * 0.002) / (segDist + 0.001);
+          // Яскраві точки зупинки дзеркал гальванометра на кінцях лінії (як на скріншоті DJ)
+          float endDots = (0.0025 + u_beatIntensity * 0.003) / (min(length(uv - pA), length(uv - pB)) + 0.003);
+
+          vec3 galvoCol = (mod(i, 2.0) < 0.5)
+            ? mix(vec3(0.05, 1.0, 0.35), palette(i * 0.15 + u_time * 0.1), u_colorShift)
+            : mix(vec3(1.0, 0.08, 0.32), palette(i * 0.15 + 0.4 + u_time * 0.1), u_colorShift);
+
+          col += galvoCol * laserLine * 0.32;
+          col += mix(galvoCol, vec3(1.0), 0.55) * endDots * 0.38;
+        }
+
+        // 4. Віялові клубні промені зверху (Liquid Sky)
+        for (float i = -4.0; i <= 4.0; i += 1.0) {
+          float angle = i * 0.16 * spread + sin(u_time * speed + i * 0.7) * (0.22 + u_mid * 0.35);
+          angle += sin(u_beatCount * 1.7 + i) * 0.15 * u_beatIntensity;
+
+          vec2 origin = vec2(0.0, 0.88);
           vec2 p = uv - origin;
           vec2 dir = normalize(vec2(sin(angle), -cos(angle)));
           float proj = max(0.0, dot(p, dir));
           float dist = length(p - dir * proj);
 
-          // Тонкий яскравий сердечник лазера + об'ємний серпанок (Volumetric haze)
-          float beam = (0.0018 + u_subBass * 0.0025) / (dist + 0.0012);
-          beam *= smoothstep(0.0, 0.15, proj) * smoothstep(2.4, 0.3, proj);
-
-          // Поперечна лазерна площина (Liquid Sky)
-          float scanWave = sin(uv.x * (6.0 + u_mid * 10.0) + u_time * 4.0 + i) * 0.12 * u_bass;
-          float planeDist = abs(uv.y - scanWave);
-          float liquidSky = (0.0012 * u_high) / (planeDist + 0.008);
-
-          vec3 beamCol = palette(i * 0.08 + u_time * 0.15);
-          col += beamCol * beam * 0.26;
-          col += beamCol * liquidSky * 0.12;
+          float beam = (0.0012 + u_subBass * 0.0018) / (dist + 0.0015);
+          beam *= smoothstep(0.0, 0.15, proj) * smoothstep(2.3, 0.3, proj);
+          col += palette(i * 0.09 + u_time * 0.15) * beam * 0.2;
         }
-
-        // Центральний геометричний лазерний приціл на ударах бочки
-        vec2 gUv = uv * rot(u_time * 0.5 + u_beatCount * 0.4);
-        float poly = abs(length(gUv) - (0.25 + u_subBass * 0.32));
-        col += palette(u_time * 0.3 + 0.4) * (0.004 / (poly + 0.003)) * (0.4 + u_beatIntensity);
 
         return col;
       }
