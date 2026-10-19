@@ -38,6 +38,8 @@ class AuraVJApp {
     this.loadSavedCustomEffects();
     this.setupSpatialNavigation();
     this.setupAutoHideHud();
+    this.setupDesktopShortcuts();
+    this.setupDesktopMouseInteractions();
     this.requestScreenWakeLock();
 
     // Запускаємо рендер-цикл одразу (навіть до першого кліку працює візуальне демо)
@@ -226,6 +228,7 @@ class AuraVJApp {
       this.highlightModeButtons(mode);
       this.sync.send({ type: "mode", mode });
     };
+    this.selectMode = selectMode;
 
     document.querySelectorAll("[data-mode]").forEach((btn) => {
       btn.addEventListener("click", () => selectMode(btn.dataset.mode));
@@ -430,13 +433,20 @@ class AuraVJApp {
    * Вкладки студії: Сцени & XY / Filmora FX / TouchDesigner CHOP Ноди / Відео & Камера
    */
   setupStudioTabs() {
+    const deck = document.getElementById("mobileDeck");
     const tabs = document.querySelectorAll(".studio-tab");
     const panels = document.querySelectorAll(".studio-panel");
     tabs.forEach((tab) => {
       tab.addEventListener("click", () => {
         const targetId = tab.dataset.tab;
         tabs.forEach((t) => t.classList.toggle("active", t === tab));
-        panels.forEach((p) => p.classList.toggle("active", p.id === targetId));
+        if (targetId === "tabAll") {
+          if (deck) deck.classList.add("console-all-active");
+          panels.forEach((p) => p.classList.add("active"));
+        } else {
+          if (deck) deck.classList.remove("console-all-active");
+          panels.forEach((p) => p.classList.toggle("active", p.id === targetId));
+        }
       });
     });
   }
@@ -794,6 +804,10 @@ class AuraVJApp {
       puck.style.left = `${x * 100}%`;
       puck.style.top = `${(1 - y) * 100}%`;
     }
+    const coordsBadge = document.getElementById("xyCoordsBadge");
+    if (coordsBadge) {
+      coordsBadge.textContent = `X: ${Math.round(x * 100)}% · Y: ${Math.round(y * 100)}%`;
+    }
   }
 
   setupFXButtons() {
@@ -1002,6 +1016,268 @@ class AuraVJApp {
         dock.classList.add("hud-hidden");
       }
     }, 4000);
+  }
+
+  /**
+   * Гарячі клавіші для професійного VJ-контролю на Десктопі / Ноутбуку
+   */
+  setupDesktopShortcuts() {
+    const sceneKeyMap = {
+      "1": "lasers",
+      "2": "blobtrack",
+      "3": "pointcloud",
+      "4": "reaction",
+      "5": "synthwave",
+      "6": "ferrofluid",
+      "7": "tunnel",
+      "8": "liquid",
+      "9": "fractal",
+    };
+
+    const tabKeyMap = {
+      q: "tabScenes",
+      e: "tabFilmoraFx",
+      r: "tabTdNodes",
+      t: "tabMediaTop",
+      a: "tabAll",
+    };
+
+    const btnStrobe = document.getElementById("fxStrobe");
+    const btnShockwave = document.getElementById("fxShockwave");
+    const btnFreeze = document.getElementById("fxFreeze");
+    const btnColorDrop = document.getElementById("fxColorDrop");
+    const shortcutsModal = document.getElementById("shortcutsModal");
+
+    const setStrobe = (active) => {
+      this.visualizer.fx.strobe = active;
+      if (btnStrobe) btnStrobe.classList.toggle("active", active);
+      this.sync.send({ type: "fx", effect: "strobe", active });
+    };
+
+    window.addEventListener("keydown", (e) => {
+      // Пропускаємо, якщо користувач вводить текст у поле чи форму
+      const target = e.target;
+      if (
+        target instanceof Element &&
+        (target.matches("input, textarea, select, [contenteditable='true']") ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+
+      // Escape закриває активні модалки
+      if (e.key === "Escape") {
+        if (shortcutsModal && !shortcutsModal.hidden) {
+          shortcutsModal.hidden = true;
+          return;
+        }
+        const qrModal = document.getElementById("qrModal");
+        if (qrModal && !qrModal.hidden) {
+          qrModal.hidden = true;
+          return;
+        }
+        const proModal = document.getElementById("proModal");
+        if (proModal && !proModal.hidden) {
+          proModal.hidden = true;
+          return;
+        }
+      }
+
+      // Довідка гарячих клавіш: ? або H
+      if (e.key === "?" || e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        if (shortcutsModal) {
+          shortcutsModal.hidden = !shortcutsModal.hidden;
+        }
+        return;
+      }
+
+      // Сцени 1-9
+      if (sceneKeyMap[e.key]) {
+        e.preventDefault();
+        const mode = sceneKeyMap[e.key];
+        if (typeof this.selectMode === "function") {
+          this.selectMode(mode);
+        } else {
+          this.visualizer.setMode(mode);
+          this.highlightModeButtons(mode);
+          this.sync.send({ type: "mode", mode });
+        }
+        const pad = document.querySelector(`.vj-pad[data-mode="${mode}"]`);
+        if (pad) {
+          pad.classList.add("active");
+          pad.focus();
+        }
+        return;
+      }
+
+      // TRG-01: STROBE (Space)
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (!e.repeat) {
+          setStrobe(true);
+        }
+        return;
+      }
+
+      // TRG-02: SHOCKWAVE (W)
+      if (e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        this.visualizer.triggerShockwave();
+        if (btnShockwave) {
+          btnShockwave.classList.add("active");
+          setTimeout(() => btnShockwave.classList.remove("active"), 140);
+        }
+        this.sync.send({ type: "fx", effect: "shockwave" });
+        return;
+      }
+
+      // TRG-03: FREEZE (F)
+      if (e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        const active = !this.visualizer.fx.freeze;
+        this.visualizer.fx.freeze = active;
+        if (btnFreeze) btnFreeze.classList.toggle("active", active);
+        this.sync.send({ type: "fx", effect: "freeze", active });
+        return;
+      }
+
+      // TRG-04: PALETTE DROP (C)
+      if (e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        this.visualizer.triggerColorDrop();
+        if (btnColorDrop) {
+          btnColorDrop.classList.add("active");
+          setTimeout(() => btnColorDrop.classList.remove("active"), 140);
+        }
+        this.sync.send({
+          type: "fx",
+          effect: "colordrop",
+          colorShift: this.visualizer.colorShift,
+        });
+        return;
+      }
+
+      // Перемикання вкладок студії: Q, E, R, T, A
+      const k = e.key.toLowerCase();
+      if (tabKeyMap[k]) {
+        e.preventDefault();
+        const tabTarget = tabKeyMap[k];
+        const tabBtn = document.querySelector(`.studio-tab[data-tab="${tabTarget}"]`);
+        if (tabBtn) tabBtn.click();
+        return;
+      }
+
+      // Перемикання монітора звуку: M
+      if (k === "m") {
+        e.preventDefault();
+        const chk = document.getElementById("chkSynthAudio");
+        if (chk) {
+          chk.checked = !chk.checked;
+          chk.dispatchEvent(new Event("change"));
+        }
+        return;
+      }
+
+      // Перемикання режимів екрана: V
+      if (k === "v") {
+        e.preventDefault();
+        const views = ["split", "projector", "remote"];
+        const nextIdx = (views.indexOf(this.currentView) + 1) % views.length;
+        this.setView(views[nextIdx]);
+        return;
+      }
+
+      // Стрілки клавіатури для точного зміщення XY Puck
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        const step = 0.04;
+        let curX = this.visualizer.xy ? this.visualizer.xy.x : 0.5;
+        let curY = this.visualizer.xy ? this.visualizer.xy.y : 0.5;
+        if (e.key === "ArrowLeft") curX = Math.max(0, curX - step);
+        if (e.key === "ArrowRight") curX = Math.min(1, curX + step);
+        if (e.key === "ArrowDown") curY = Math.max(0, curY - step);
+        if (e.key === "ArrowUp") curY = Math.min(1, curY + step);
+        e.preventDefault();
+        this.updateXYUI(curX, curY);
+        this.visualizer.setXY(curX, curY);
+        this.sync.send({ type: "xy", x: curX, y: curY });
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "Space") {
+        setStrobe(false);
+      }
+    });
+
+    window.addEventListener("blur", () => {
+      setStrobe(false);
+    });
+  }
+
+  /**
+   * Розширені можливості маніпуляції мишею на десктопі
+   */
+  setupDesktopMouseInteractions() {
+    const xyPad = document.getElementById("xyPad");
+    if (xyPad) {
+      // Подвійний клік повертає puck у центр (50%, 50%)
+      xyPad.addEventListener("dblclick", () => {
+        this.updateXYUI(0.5, 0.5);
+        this.visualizer.setXY(0.5, 0.5);
+        this.sync.send({ type: "xy", x: 0.5, y: 0.5 });
+      });
+    }
+
+    // Тонке регулювання коліщатком миші над фейдерами
+    document.querySelectorAll('input[type="range"]').forEach((slider) => {
+      slider.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          const step = Number(slider.step) || 2;
+          const delta = e.deltaY < 0 ? step : -step;
+          const min = Number(slider.min) || 0;
+          const max = Number(slider.max) || 100;
+          const current = Number(slider.value) || 0;
+          const next = Math.max(min, Math.min(max, current + delta));
+          if (next !== current) {
+            slider.value = next;
+            slider.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        },
+        { passive: false }
+      );
+
+      // Подвійний клік скидає слайдер на значення за замовчуванням
+      slider.addEventListener("dblclick", () => {
+        const defaultVal =
+          slider.id === "rangeKeystoneScale"
+            ? 100
+            : Number(slider.min) || 0;
+        slider.value = defaultVal;
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    });
+
+    // Відкриття та закриття модалки гарячих клавіш
+    const btnShortcuts = document.getElementById("btnShortcuts");
+    const modal = document.getElementById("shortcutsModal");
+    const btnClose = document.getElementById("btnCloseShortcuts");
+    if (btnShortcuts && modal) {
+      btnShortcuts.addEventListener("click", () => {
+        modal.hidden = false;
+      });
+    }
+    if (btnClose && modal) {
+      btnClose.addEventListener("click", () => {
+        modal.hidden = true;
+      });
+    }
   }
 
   renderQrModal() {

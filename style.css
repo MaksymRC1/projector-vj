@@ -1333,3 +1333,374 @@ input[type="range"]::-webkit-slider-thumb {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ==========================================================================
+   АДАПТАЦІЯ ПУЛЬТА ПІД DESKTOP (PRO VJ WORKSTATION & HARDWARE CONSOLE)
+   ========================================================================== */
+
+/* 1. Кастомний темний скролбар для десктопу */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.25);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* 2. Апаратні моноширинні бейджі гарячих клавіш (Hardware Keycaps) */
+.kbd-hint {
+  display: none;
+}
+
+.desktop-only-tab {
+  display: none !important;
+}
+
+@media (min-width: 900px) {
+  .kbd-hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 0.52rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-bottom: 1.5px solid rgba(255, 255, 255, 0.24);
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: auto;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  .vj-pad:hover .kbd-hint,
+  .fx-btn:hover .kbd-hint,
+  .studio-tab:hover .kbd-hint {
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .vj-pad.active .kbd-hint,
+  .fx-btn.active .kbd-hint {
+    background: rgba(0, 0, 0, 0.3);
+    color: #09090b;
+    border-color: rgba(0, 0, 0, 0.4);
+  }
+
+  .studio-tab.active .kbd-hint {
+    background: rgba(255, 87, 34, 0.2);
+    color: #ff8a65;
+    border-color: rgba(255, 87, 34, 0.4);
+  }
+}
+
+/* 3. Живий бейдж координат XY Touchpad */
+.xy-coords-badge {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(10, 10, 14, 0.72);
+  border: 1px solid var(--border-hairline);
+  padding: 2px 7px;
+  border-radius: 5px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(8px);
+}
+
+/* 4. Тонке керування слайдерами мишею на десктопі */
+@media (hover: hover) and (pointer: fine) {
+  .fx-range {
+    cursor: ew-resize;
+    transition: background 0.15s ease;
+  }
+
+  .fx-range:hover {
+    background: rgba(255, 255, 255, 0.24);
+  }
+
+  .fx-slider-row:hover .fx-slider-label {
+    color: var(--text-primary);
+  }
+
+  .fx-range::-webkit-slider-thumb:hover {
+    transform: scale(1.18);
+    box-shadow: 0 0 10px rgba(255, 87, 34, 0.6);
+  }
+}
+
+/* 5. Модальне вікно довідки гарячих клавіш десктопу */
+.shortcuts-card {
+  max-width: 640px !important;
+  text-align: left !important;
+  padding: 24px 28px !important;
+}
+
+.shortcuts-header {
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-hairline);
+  padding-bottom: 12px;
+}
+
+.shortcuts-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+}
+
+.shortcuts-title-row h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.shortcuts-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 600px) {
+  .shortcuts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shortcut-group-title {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent-signal);
+  letter-spacing: 0.08em;
+  display: block;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.shortcut-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.shortcut-item kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  line-height: 1.1;
+}
+
+/* 6. ДЕСКТОП РОЗКЛАДКА: SPLIT РЕЖИМ (ПРОЕКТОР ЗЛІВА + ПУЛЬТ СПРАВА) */
+@media (min-width: 1024px) {
+  body[data-view="split"] {
+    display: grid;
+    grid-template-columns: minmax(480px, 1.2fr) minmax(460px, 1fr);
+    grid-template-rows: 48px 1fr;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  body[data-view="split"] .top-bar {
+    grid-column: 1 / -1;
+  }
+
+  body[data-view="split"] .projector-stage {
+    grid-column: 1;
+    grid-row: 2;
+    height: 100% !important;
+    min-height: 0 !important;
+    border-bottom: none;
+    border-right: 1px solid var(--border-hairline);
+    position: relative;
+  }
+
+  body[data-view="split"] .projector-dock {
+    display: flex;
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    max-width: 90%;
+    overflow-x: auto;
+  }
+
+  body[data-view="split"] .mobile-vj-deck {
+    grid-column: 2;
+    grid-row: 2;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px 18px 24px;
+    border-left: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  /* 7. ДЕСКТОП РОЗКЛАДКА: REMOTE РЕЖИМ (КОНСОЛЬНИЙ ПУЛЬТ) */
+  body[data-view="remote"] .projector-stage {
+    height: 80px;
+    min-height: 80px;
+  }
+
+  body[data-view="remote"] .mobile-vj-deck {
+    max-width: 1380px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 16px 24px 32px;
+  }
+
+  /* 8. ДЕСКТОП-ВКЛАДКА "СЦЕНИ & XY": ДВОКОЛОНКОВИЙ ІНСТРУМЕНТ */
+  #mobileDeck:not(.console-all-active) #tabScenes.active {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabScenes.active .preset-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabScenes.active .xy-pad-wrapper {
+    height: auto;
+    min-height: 230px;
+  }
+
+  /* 9. ДЕСКТОП-РЕЖИМ "КОНСОЛЬ (ВСЕ)": ОДНОЧАСНИЙ ВИВІД УСІХ 4 РЕКІВ */
+  .desktop-only-tab {
+    display: inline-flex !important;
+  }
+
+  #mobileDeck.console-all-active .studio-tab[data-tab="tabAll"] {
+    background: rgba(255, 87, 34, 0.16);
+    border-color: rgba(255, 87, 34, 0.4);
+    color: #ff8a65;
+    box-shadow: var(--specular-top);
+  }
+
+  #mobileDeck.console-all-active .studio-panel {
+    display: flex !important;
+    flex: 0 0 auto;
+  }
+
+  #mobileDeck.console-all-active {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 14px 16px;
+    align-items: start;
+  }
+
+  #mobileDeck.console-all-active > .source-strip {
+    grid-column: 1 / -1;
+  }
+
+  #mobileDeck.console-all-active > .studio-tabs {
+    grid-column: 1 / -1;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes {
+    grid-column: 1;
+    display: flex !important;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .xy-pad-wrapper {
+    height: 140px;
+    min-height: 140px;
+  }
+
+  #mobileDeck.console-all-active > #tabFilmoraFx {
+    grid-column: 2;
+  }
+
+  #mobileDeck.console-all-active > #tabTdNodes {
+    grid-column: 2;
+  }
+
+  #mobileDeck.console-all-active > #tabMediaTop {
+    grid-column: 1;
+  }
+
+  #mobileDeck.console-all-active > .fx-row {
+    grid-column: 1 / -1;
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    background: rgba(7, 7, 9, 0.94);
+    backdrop-filter: blur(20px);
+    padding-top: 10px;
+    padding-bottom: 4px;
+    border-top: 1px solid var(--border-hairline);
+  }
+}
+
+/* 10. АДАПТАЦІЯ ДЛЯ ШИРОКИХ МОНІТОРІВ (>= 1400px) */
+@media (min-width: 1400px) {
+  .fx-sliders-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .chop-matrix {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 12px;
+  }
+
+  .chop-row {
+    grid-template-columns: 110px 1fr 65px;
+  }
+
+  .source-pills {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .fx-btn {
+    padding: 10px 14px;
+  }
+}

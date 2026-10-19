@@ -61,6 +61,23 @@
           </svg>
           <span>FX LAB</span>
         </a>
+        <button
+          class="room-pill shortcuts-btn"
+          id="btnShortcuts"
+          title="Гарячі клавіші для десктопу (Клавіша ? або H)"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <line x1="6" y1="8" x2="6" y2="8" />
+            <line x1="10" y1="8" x2="10" y2="8" />
+            <line x1="14" y1="8" x2="14" y2="8" />
+            <line x1="18" y1="8" x2="18" y2="8" />
+            <line x1="6" y1="12" x2="6" y2="12" />
+            <line x1="18" y1="12" x2="18" y2="12" />
+            <line x1="8" y1="16" x2="16" y2="16" />
+          </svg>
+          <span>KEYS</span>
+        </button>
       </div>
 
       <div class="view-switcher" role="tablist" aria-label="Режим екрана">
@@ -289,6 +306,7 @@
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
           <span>Сцени & XY</span>
+          <span class="kbd-hint">Q</span>
         </button>
         <button class="studio-tab" data-tab="tabFilmoraFx" role="tab">
           <svg class="ico" viewBox="0 0 24 24">
@@ -297,6 +315,7 @@
             <polyline points="2 17 12 22 22 17" />
           </svg>
           <span>FX Шари</span>
+          <span class="kbd-hint">E</span>
         </button>
         <button class="studio-tab" data-tab="tabTdNodes" role="tab">
           <svg class="ico" viewBox="0 0 24 24">
@@ -305,6 +324,7 @@
             <path d="M8.5 6H12a4 4 0 0 1 4 4v5.5" />
           </svg>
           <span>CHOP Матриця</span>
+          <span class="kbd-hint">R</span>
         </button>
         <button class="studio-tab" data-tab="tabMediaTop" role="tab">
           <svg class="ico" viewBox="0 0 24 24">
@@ -312,6 +332,21 @@
             <rect x="1" y="5" width="15" height="14" rx="2" />
           </svg>
           <span>Медіа Вхід</span>
+          <span class="kbd-hint">T</span>
+        </button>
+        <button
+          class="studio-tab desktop-only-tab"
+          data-tab="tabAll"
+          role="tab"
+          title="Повний пульт: всі 4 рэки одночасно (Клавіша A)"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="3" y1="9" x2="21" y2="9" />
+            <line x1="9" y1="21" x2="9" y2="9" />
+          </svg>
+          <span>Консоль (Все)</span>
+          <span class="kbd-hint">A</span>
         </button>
       </div>
 
@@ -324,6 +359,7 @@
                 <path d="M12 2L2 22M12 2l10 20M12 2v20M4.5 17h15" />
               </svg>
               <span class="pad-code">SCN-01</span>
+              <span class="kbd-hint">1</span>
             </div>
             <span class="pad-name">Galvo Laser</span>
             <span class="pad-sub">X-Y Scan & Nebula</span>
@@ -336,6 +372,7 @@
                 <circle cx="12" cy="12" r="3" />
               </svg>
               <span class="pad-code">SCN-02</span>
+              <span class="kbd-hint">2</span>
             </div>
             <span class="pad-name">TD Blob Track</span>
             <span class="pad-sub">Computer Vision CV</span>
@@ -352,6 +389,7 @@
                 <path d="M6 6l6 6 6-5M7 18l5-6 5 5" />
               </svg>
               <span class="pad-code">SCN-03</span>
+              <span class="kbd-hint">3</span>
             </div>
             <span class="pad-name">TD Point Cloud</span>
             <span class="pad-sub">3D Curl & Plexus</span>
@@ -364,6 +402,7 @@
                 <path d="M2 17c3-6 6-6 9 0s6 6 11 0" />
               </svg>
               <span class="pad-code">SCN-04</span>
+              <span class="kbd-hint">4</span>
             </div>
             <span class="pad-name">TD Reaction</span>
             <span class="pad-sub">Feedback Displace</span>
@@ -376,6 +415,7 @@
                 <line x1="2" y1="15" x2="22" y2="15" />
               </svg>
               <span class="pad-code">SCN-05</span>
+              <span class="kbd-hint">5</span>
             </div>
             <span class="pad-name">3D Terrain</span>
             <span class="pad-sub">Horizon Wireframe</span>
@@ -388,6 +428,7 @@
                 <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
               </svg>
               <span class="pad-code">SCN-06</span>
+              <span class="kbd-hint">6</span>
             </div>
             <span class="pad-name">Ferrofluid</span>
             <span class="pad-sub">Magnetic Sphere</span>
@@ -400,6 +441,7 @@
                 <polygon points="12 7 16.5 9.5 16.5 14.5 12 17 7.5 14.5 7.5 9.5 12 7" />
               </svg>
               <span class="pad-code">SCN-07</span>
+              <span class="kbd-hint">7</span>
             </div>
             <span class="pad-name">Infinity Tunnel</span>
             <span class="pad-sub">Vector Depth</span>
@@ -411,6 +453,7 @@
                 <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
               </svg>
               <span class="pad-code">SCN-08</span>
+              <span class="kbd-hint">8</span>
             </div>
             <span class="pad-name">Silk Aura</span>
             <span class="pad-sub">Harmonic Waves</span>
@@ -423,6 +466,7 @@
                 <rect x="6" y="6" width="12" height="12" />
               </svg>
               <span class="pad-code">SCN-09</span>
+              <span class="kbd-hint">9</span>
             </div>
             <span class="pad-name">Sacred Geometry</span>
             <span class="pad-sub">Iterated Fractal</span>
@@ -431,8 +475,9 @@
 
         <!-- Інтерактивний XY MORPH TOUCHPAD -->
         <div class="xy-pad-wrapper">
-          <div class="xy-pad" id="xyPad">
+          <div class="xy-pad" id="xyPad" title="Керування XY модуляцією (Перетягування мишею, стрілки на клавіатурі, подвійний клік для центрування)">
             <span class="xy-axis-label top">AXIS Y · MODULATION SPEED</span>
+            <span class="xy-coords-badge" id="xyCoordsBadge">X: 50% · Y: 50%</span>
             <span class="xy-axis-label bottom">AXIS X · GEOMETRY SPREAD</span>
             <div class="xy-puck" id="xyPuck" style="left: 50%; top: 50%">
               <div class="xy-puck-ring"></div>
@@ -769,18 +814,20 @@
 
       <!-- 4 ТАКТИЛЬНІ КЛАВІШІ TRG-FX (TEENAGE ENGINEERING SYNTH KEYS) -->
       <div class="fx-row" id="fxRow">
-        <button class="fx-btn strobe" id="fxStrobe">
+        <button class="fx-btn strobe" id="fxStrobe" title="Стробоскоп (Утримувати Space)">
           <div class="fx-btn-head">
             <small>TRG-01</small>
+            <span class="kbd-hint">SPACE</span>
             <svg class="ico" viewBox="0 0 24 24">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
             </svg>
           </div>
           <span>STROBE</span>
         </button>
-        <button class="fx-btn shockwave" id="fxShockwave">
+        <button class="fx-btn shockwave" id="fxShockwave" title="Ударна хвиля (Клавіша W)">
           <div class="fx-btn-head">
             <small>TRG-02</small>
+            <span class="kbd-hint">W</span>
             <svg class="ico" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="9" />
               <circle cx="12" cy="12" r="4" />
@@ -788,9 +835,10 @@
           </div>
           <span>SHOCKWAVE</span>
         </button>
-        <button class="fx-btn freeze" id="fxFreeze">
+        <button class="fx-btn freeze" id="fxFreeze" title="Заморозка кадру (Клавіша F)">
           <div class="fx-btn-head">
             <small>TRG-03</small>
+            <span class="kbd-hint">F</span>
             <svg class="ico" viewBox="0 0 24 24">
               <rect x="6" y="4" width="4" height="16" />
               <rect x="14" y="4" width="4" height="16" />
@@ -798,9 +846,10 @@
           </div>
           <span>FREEZE</span>
         </button>
-        <button class="fx-btn colordrop" id="fxColorDrop">
+        <button class="fx-btn colordrop" id="fxColorDrop" title="Зміна колірної палітри (Клавіша C)">
           <div class="fx-btn-head">
             <small>TRG-04</small>
+            <span class="kbd-hint">C</span>
             <svg class="ico" viewBox="0 0 24 24">
               <circle cx="13.5" cy="6.5" r="2.5" />
               <circle cx="17.5" cy="10.5" r="2.5" />
@@ -877,6 +926,116 @@
         <button class="close-modal-btn" id="btnCloseProModal" style="margin-top: 8px">
           CLOSE
         </button>
+      </div>
+    </div>
+
+    <!-- Модальне вікно гарячих клавіш для десктопу (Keyboard Shortcuts) -->
+    <div class="qr-modal shortcuts-modal" id="shortcutsModal" hidden>
+      <div class="qr-card shortcuts-card">
+        <div class="shortcuts-header">
+          <div class="shortcuts-title-row">
+            <svg class="ico ico-lg" viewBox="0 0 24 24">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <line x1="6" y1="8" x2="6" y2="8" />
+              <line x1="10" y1="8" x2="10" y2="8" />
+              <line x1="14" y1="8" x2="14" y2="8" />
+              <line x1="18" y1="8" x2="18" y2="8" />
+              <line x1="6" y1="12" x2="6" y2="12" />
+              <line x1="18" y1="12" x2="18" y2="12" />
+              <line x1="8" y1="16" x2="16" y2="16" />
+            </svg>
+            <h3>DESKTOP VJ KEYBOARD SHORTCUTS</h3>
+          </div>
+          <span class="shortcuts-sub">Швидке керування пультом із клавіатури ПК/Mac без миші</span>
+        </div>
+
+        <div class="shortcuts-grid">
+          <div class="shortcut-group">
+            <span class="shortcut-group-title">ПЕРЕМИКАННЯ СЦЕН (1-9)</span>
+            <div class="shortcut-item">
+              <kbd>1</kbd>
+              <span>Galvo Laser (SCN-01)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>2</kbd>
+              <span>TD Blob Track (SCN-02)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>3</kbd>
+              <span>TD Point Cloud (SCN-03)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>4</kbd>
+              <span>TD Reaction (SCN-04)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>5</kbd>
+              <span>3D Terrain (SCN-05)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>6</kbd>
+              <span>Ferrofluid (SCN-06)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>7</kbd>
+              <span>Infinity Tunnel (SCN-07)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>8</kbd>
+              <span>Silk Aura (SCN-08)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>9</kbd>
+              <span>Sacred Geometry (SCN-09)</span>
+            </div>
+          </div>
+
+          <div class="shortcut-group">
+            <span class="shortcut-group-title">ТАКТИЛЬНІ TRG-FX ТА СТУДІЯ</span>
+            <div class="shortcut-item">
+              <kbd>SPACE</kbd>
+              <span>STROBE Спалах (утримувати)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>W</kbd>
+              <span>SHOCKWAVE Ударна хвиля</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>F</kbd>
+              <span>FREEZE Заморозка кадру</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>C</kbd>
+              <span>PALETTE Зміна колірного зсуву</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>T</kbd>
+              <span>Вкладки Студії</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>A</kbd>
+              <span>Консоль (Всі 4 рэки разом)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>M</kbd>
+              <span>Mute / Монітор синтезатора</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>V</kbd>
+              <span>Режим (Split / Проектор / Пульт)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>
+              <span>Точне зміщення XY Puck</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>?</kbd> або <kbd>H</kbd>
+              <span>Ця довідка гарячих клавіш</span>
+            </div>
+          </div>
+        </div>
+
+        <button class="close-modal-btn" id="btnCloseShortcuts">ЗРОЗУМІЛО (ESC)</button>
       </div>
     </div>
 
