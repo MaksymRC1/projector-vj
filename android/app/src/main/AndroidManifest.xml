@@ -24,7 +24,7 @@
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation"
             android:exported="true"
-            android:screenOrientation="SensorLandscape">
+            android:screenOrientation="unspecified">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
