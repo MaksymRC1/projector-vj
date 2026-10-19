@@ -20,7 +20,14 @@ class SyncManager {
     this.pingInterval = null;
     this.connectTimeout = null;
     this.cloudConnected = false;
-    this.lastTelemetrySent = 0;
+    this.lastTelemetrySentMqtt = 0;
+    this.lastTelemetrySentP2P = 0;
+
+    // WebRTC Peer-to-Peer DataChannel (пряме UDP-з'єднання 1-15ms без посередників)
+    this.pc = null;
+    this.webrtcChannel = null;
+    this.p2pConnected = false;
+    this.iceCandidateQueue = [];
 
     // Список надійних WSS MQTT-брокерів з автоматичним перемиканням (Multi-Broker Failover)
     this.brokers = [
@@ -32,7 +39,9 @@ class SyncManager {
 
     if (this.bc) {
       this.bc.onmessage = (e) => {
-        if (this.onMessage) this.onMessage(e.data);
+        if (e.data && e.data.sender !== this.clientId) {
+          this.handleIncomingRawMessage(e.data);
+        }
       };
     }
 
@@ -75,6 +84,7 @@ class SyncManager {
     const clean = String(newRoomId).trim().toUpperCase();
     if (!clean) return;
     this.roomId = clean;
+    this.closeWebRTC();
     try {
       localStorage.setItem("aura_vj_room", clean);
     } catch {}
@@ -148,8 +158,8 @@ class SyncManager {
         } else if (packetType === 3) {
           // PUBLISH пакет від іншого пристрою в кімнаті
           const parsed = this.parseMqttPublishPacket(bytes);
-          if (parsed && parsed.sender !== this.clientId && this.onMessage) {
-            this.onMessage(parsed);
+          if (parsed && parsed.sender !== this.clientId) {
+            this.handleIncomingRawMessage(parsed);
           }
         }
       };
@@ -256,8 +266,8 @@ class SyncManager {
       this.lanWs.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          if (msg.sender !== this.clientId && this.onMessage) {
-            this.onMessage(msg);
+          if (msg && msg.sender !== this.clientId) {
+            this.handleIncomingRawMessage(msg);
           }
         } catch {}
       };
@@ -268,26 +278,240 @@ class SyncManager {
     } catch {}
   }
 
+  /**
+   * 3. WebRTC P2P DataChannel (Ультра-низька затримка 1-15ms через прямий браузер-браузер UDP)
+   */
+  setupWebRTC(isInitiator) {
+    if (typeof RTCPeerConnection === "undefined") return;
+    this.closeWebRTC();
+    this.iceCandidateQueue = [];
+
+    const config = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+      ],
+    };
+
+    try {
+      this.pc = new RTCPeerConnection(config);
+
+      this.pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          this.sendSignalingMessage({
+            type: "_rtc_ice",
+            candidate: event.candidate,
+          });
+        }
+      };
+
+      this.pc.onconnectionstatechange = () => {
+        if (!this.pc) return;
+        const state = this.pc.connectionState;
+        if (state === "disconnected" || state === "failed" || state === "closed") {
+          this.p2pConnected = false;
+          this.webrtcChannel = null;
+          this.notifyStatus();
+        }
+      };
+
+      if (isInitiator) {
+        // Режим unordered і maxRetransmits: 0 забезпечує семантику UDP без черг і затримок
+        const dc = this.pc.createDataChannel("aura_vj_p2p", {
+          ordered: false,
+          maxRetransmits: 0,
+        });
+        this.bindDataChannel(dc);
+
+        this.pc
+          .createOffer()
+          .then((offer) => this.pc.setLocalDescription(offer))
+          .then(() => {
+            this.sendSignalingMessage({
+              type: "_rtc_offer",
+              sdp: this.pc.localDescription,
+            });
+          })
+          .catch(() => {});
+      } else {
+        this.pc.ondatachannel = (event) => {
+          this.bindDataChannel(event.channel);
+        };
+      }
+    } catch (err) {
+      console.warn("RTC Setup error:", err);
+    }
+  }
+
+  bindDataChannel(dc) {
+    this.webrtcChannel = dc;
+    dc.onopen = () => {
+      this.p2pConnected = true;
+      this.notifyStatus();
+    };
+    dc.onclose = () => {
+      this.p2pConnected = false;
+      this.webrtcChannel = null;
+      this.notifyStatus();
+    };
+    dc.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg && msg.sender !== this.clientId) {
+          this.handleIncomingRawMessage(msg);
+        }
+      } catch {}
+    };
+  }
+
+  async handleRtcOffer(msg) {
+    if (!this.pc || this.pc.signalingState === "closed") {
+      this.setupWebRTC(false);
+    }
+    if (!this.pc) return;
+    try {
+      await this.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      this.processIceQueue();
+      const answer = await this.pc.createAnswer();
+      await this.pc.setLocalDescription(answer);
+      this.sendSignalingMessage({
+        type: "_rtc_answer",
+        sdp: this.pc.localDescription,
+      });
+    } catch (err) {
+      console.warn("RTC Offer handle error:", err);
+    }
+  }
+
+  async handleRtcAnswer(msg) {
+    if (!this.pc) return;
+    try {
+      await this.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      this.processIceQueue();
+    } catch (err) {
+      console.warn("RTC Answer handle error:", err);
+    }
+  }
+
+  handleRtcIce(msg) {
+    if (!msg.candidate) return;
+    const candidate = new RTCIceCandidate(msg.candidate);
+    if (this.pc && this.pc.remoteDescription && this.pc.remoteDescription.type) {
+      this.pc.addIceCandidate(candidate).catch(() => {});
+    } else {
+      if (!this.iceCandidateQueue) this.iceCandidateQueue = [];
+      this.iceCandidateQueue.push(candidate);
+    }
+  }
+
+  processIceQueue() {
+    if (!this.iceCandidateQueue || !this.pc) return;
+    while (this.iceCandidateQueue.length > 0) {
+      const cand = this.iceCandidateQueue.shift();
+      this.pc.addIceCandidate(cand).catch(() => {});
+    }
+  }
+
+  closeWebRTC() {
+    if (this.webrtcChannel) {
+      try {
+        this.webrtcChannel.close();
+      } catch {}
+      this.webrtcChannel = null;
+    }
+    if (this.pc) {
+      try {
+        this.pc.close();
+      } catch {}
+      this.pc = null;
+    }
+    this.p2pConnected = false;
+  }
+
+  sendSignalingMessage(payload) {
+    const packet = { ...payload, sender: this.clientId, room: this.roomId };
+    const jsonStr = JSON.stringify(packet);
+    if (this.bc) this.bc.postMessage(packet);
+    if (this.lanWs && this.lanWs.readyState === WebSocket.OPEN) {
+      this.lanWs.send(jsonStr);
+    }
+    if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN && this.cloudConnected) {
+      this.cloudWs.send(this.buildMqttPublishPacket(this.getTopic(), jsonStr));
+    }
+  }
+
+  /**
+   * Централізований обробник вхідних повідомлень з усіх каналів
+   */
+  handleIncomingRawMessage(msg) {
+    if (!msg || msg.sender === this.clientId) return;
+
+    // 1. WebRTC Сигналізація
+    if (msg.type === "_rtc_offer") {
+      this.handleRtcOffer(msg);
+      return;
+    }
+    if (msg.type === "_rtc_answer") {
+      this.handleRtcAnswer(msg);
+      return;
+    }
+    if (msg.type === "_rtc_ice") {
+      this.handleRtcIce(msg);
+      return;
+    }
+
+    // 2. Автоматичне створення P2P каналу при виявленні іншого пристрою в кімнаті
+    if (msg.type === "peerHeartbeat" && !this.p2pConnected && !this.pc) {
+      // Детерміновано обираємо ініціатора (пристрій з більшим clientId)
+      if (this.clientId > msg.sender) {
+        this.setupWebRTC(true);
+      }
+    }
+
+    if (this.onMessage) {
+      this.onMessage(msg);
+    }
+  }
+
   send(payload) {
     const packet = { ...payload, sender: this.clientId, room: this.roomId };
+    const jsonStr = JSON.stringify(packet);
 
-    // 1. Локальні вкладки
+    // 1. Локальні вкладки (0ms)
     if (this.bc) {
       this.bc.postMessage(packet);
     }
 
-    // 2. Локальний Wi-Fi сервер
-    const jsonStr = JSON.stringify(packet);
+    // 2. WebRTC P2P DataChannel (1-15ms пряме з'єднання)
+    if (this.webrtcChannel && this.webrtcChannel.readyState === "open") {
+      try {
+        if (payload.type === "dspTelemetry") {
+          const now = performance.now();
+          if (now - this.lastTelemetrySentP2P < 33) return; // ~30 FPS для P2P
+          this.lastTelemetrySentP2P = now;
+        }
+        this.webrtcChannel.send(jsonStr);
+        // Якщо P2P активний, високочастотну телеметрію НЕ потрібно дублювати в хмарний брокер!
+        if (payload.type === "dspTelemetry") {
+          return;
+        }
+      } catch {
+        this.p2pConnected = false;
+      }
+    }
+
+    // 3. Локальний Wi-Fi сервер
     if (this.lanWs && this.lanWs.readyState === WebSocket.OPEN) {
       this.lanWs.send(jsonStr);
     }
 
-    // 3. Хмарний MQTT (для телеметрії обмежуємо частоту до ~25 пакетів/сек для стабільності 4G)
+    // 4. Хмарний MQTT (для телеметрії обмежуємо частоту до ~12 пакетів/сек для уникнення bufferbloat)
     if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN && this.cloudConnected) {
       if (payload.type === "dspTelemetry") {
         const now = performance.now();
-        if (now - this.lastTelemetrySent < 40) return;
-        this.lastTelemetrySent = now;
+        if (now - this.lastTelemetrySentMqtt < 80) return; // 80ms = ~12.5 FPS
+        this.lastTelemetrySentMqtt = now;
       }
       this.cloudWs.send(this.buildMqttPublishPacket(this.getTopic(), jsonStr));
     }
@@ -300,6 +524,7 @@ class SyncManager {
         connected:
           this.cloudConnected ||
           (this.lanWs && this.lanWs.readyState === WebSocket.OPEN),
+        p2p: this.p2pConnected,
         roomId: this.roomId,
       });
     }

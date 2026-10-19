@@ -55,7 +55,13 @@ class DSPEngine {
 
     // Дані від віддаленого смартфона-сенсора
     this.remoteTelemetry = null;
+    this.targetRemote = null;
+    this.lastRemoteTelemetryTime = 0;
     this.hasNativeAndroidBins = false;
+
+    // Чутливість та підсилювач мікрофона (для захоплення звуку в приміщенні)
+    this.micSensitivity = 2.5;
+    this.micGainNode = null;
   }
 
   async start(sourceType = "synth", file = null) {
@@ -94,15 +100,42 @@ class DSPEngine {
     this.waveData = new Uint8Array(this.analyser.frequencyBinCount);
 
     if (sourceType === "mic") {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      this.mediaStream = stream;
+
+      // Підсилювач чутливості мікрофона
+      this.micGainNode = this.ctx.createGain();
+      this.micGainNode.gain.value = this.micSensitivity || 2.5;
+
       this.sourceNode = this.ctx.createMediaStreamSource(this.mediaStream);
-      this.sourceNode.connect(this.analyser);
+      this.sourceNode.connect(this.micGainNode);
+      this.micGainNode.connect(this.analyser);
+
+      // КРИТИЧНО ДЛЯ iOS SAFARI: WebKit не качає аудіо-семпли в AnalyserNode,
+      // якщо немає зв'язку з ctx.destination! Підключаємо через нульовий Gain:
+      const zeroGain = this.ctx.createGain();
+      zeroGain.gain.value = 0.0;
+      this.analyser.connect(zeroGain);
+      zeroGain.connect(this.ctx.destination);
+
+      if (this.ctx.state === "suspended") {
+        await this.ctx.resume();
+      }
+
+      // Калібрування AGC спеціально під мікрофон смартфона
+      this.agcPeak = 45;
+      this.agcNoiseFloor = 4;
     } else if (sourceType === "screen") {
       if (!navigator.mediaDevices?.getDisplayMedia) {
         throw new Error("Захоплення екрана не підтримується в цьому браузері");
@@ -278,11 +311,51 @@ class DSPEngine {
     }
   }
 
+  setMicGain(multiplier = 2.5) {
+    this.micSensitivity = multiplier;
+    if (this.micGainNode && this.ctx && this.ctx.state !== "closed") {
+      this.micGainNode.gain.setTargetAtTime(multiplier, this.ctx.currentTime, 0.02);
+    }
+  }
+
   /**
-   * Прийом телеметрії спектра з мікрофона смартфона (60 FPS)
+   * Прийом аудіо-телеметрії з пульта смартфона (компактний масив або об'єкт)
    */
   ingestRemoteTelemetry(packet) {
-    this.remoteTelemetry = packet;
+    if (!packet) return;
+    this.lastRemoteTelemetryTime = performance.now();
+    this.activeSource = "remote";
+    this.isRunning = true;
+
+    if (Array.isArray(packet)) {
+      this.targetRemote = {
+        subBass: packet[0] || 0,
+        bass: packet[1] || 0,
+        mid: packet[2] || 0,
+        high: packet[3] || 0,
+        beatIntensity: packet[4] || 0,
+        bpm: packet[5] || 128,
+        beatPhase: packet[6] || 0,
+        isBeat: !!packet[7],
+      };
+    } else {
+      this.targetRemote = {
+        subBass: packet.subBass || 0,
+        bass: packet.bass || 0,
+        mid: packet.mid || 0,
+        high: packet.high || 0,
+        beatIntensity: packet.beatIntensity || 0,
+        bpm: packet.bpm || 128,
+        beatPhase: packet.beatPhase || 0,
+        isBeat: !!packet.isBeat,
+      };
+    }
+
+    if (this.targetRemote.isBeat) {
+      this.beatCount++;
+      this.isBeat = true;
+      this.beatIntensity = 1.0;
+    }
   }
 
   /**
@@ -298,11 +371,51 @@ class DSPEngine {
   }
 
   /**
-   * Головний цикл DSP-обробки на кожному кадрі
+   * Головний цикл DSP-обробки на кожному кадрі (60-120 FPS)
    */
   update(now = performance.now()) {
-    if (this.activeSource === "remote" && this.remoteTelemetry) {
-      return this.remoteTelemetry;
+    // 1. Якщо джерело — віддалений смартфон (P2P або Хмара): 60 FPS плавна інтерполяція (lerp)
+    if (this.activeSource === "remote" && this.targetRemote) {
+      if (now - this.lastRemoteTelemetryTime > 2500) {
+        return this.getEmptyState();
+      }
+
+      // Плавне підтягування значень між мережевими пакетами
+      const lerp = 0.45;
+      this.envelopes.subBass += (this.targetRemote.subBass - this.envelopes.subBass) * lerp;
+      this.envelopes.bass += (this.targetRemote.bass - this.envelopes.bass) * lerp;
+      this.envelopes.mid += (this.targetRemote.mid - this.envelopes.mid) * lerp;
+      this.envelopes.high += (this.targetRemote.high - this.envelopes.high) * lerp;
+      this.beatIntensity = Math.max(
+        this.beatIntensity * 0.86,
+        this.targetRemote.beatIntensity
+      );
+      this.targetRemote.beatIntensity *= 0.86;
+
+      const energy =
+        (this.envelopes.subBass +
+          this.envelopes.bass +
+          this.envelopes.mid +
+          this.envelopes.high) /
+        4;
+
+      const hitBeat = this.isBeat;
+      this.isBeat = false; // Скидаємо удар після 1 кадру рендеру
+
+      return {
+        subBass: this.envelopes.subBass,
+        bass: this.envelopes.bass,
+        mid: this.envelopes.mid,
+        high: this.envelopes.high,
+        energy,
+        isBeat: hitBeat,
+        beatIntensity: this.beatIntensity,
+        beatCount: this.beatCount,
+        bpm: this.targetRemote.bpm,
+        beatPhase: this.targetRemote.beatPhase,
+        freqData: this.freqData,
+        waveData: this.waveData,
+      };
     }
 
     if (this.activeSource === "native_android") {
@@ -329,20 +442,23 @@ class DSPEngine {
     const rawMid = this.bandAverage(bassEnd, midEnd);
     const rawHigh = this.bandAverage(midEnd, highEnd);
 
-    // 1. Auto-Gain Control (AGC) — плавна адаптація до гучності кімнати
+    // 1. Auto-Gain Control (AGC) — швидка й плавна адаптація до гучності кімнати
     const currentMax = Math.max(rawSub, rawBass, rawMid, rawHigh);
     if (currentMax > this.agcPeak) {
       this.agcPeak = this.agcPeak * 0.9 + currentMax * 0.1;
     } else {
-      this.agcPeak = Math.max(55, this.agcPeak * 0.9985);
+      const decay = this.activeSource === "mic" ? 0.992 : 0.9985;
+      const minPeak = this.activeSource === "mic" ? 28 : 55;
+      this.agcPeak = Math.max(minPeak, this.agcPeak * decay);
     }
 
     const norm = (val) => {
       const cleaned = Math.max(0, val - this.agcNoiseFloor);
-      return Math.min(1.0, cleaned / Math.max(30, this.agcPeak - this.agcNoiseFloor));
+      const denominator = Math.max(22, this.agcPeak - this.agcNoiseFloor);
+      return Math.min(1.0, cleaned / denominator);
     };
 
-    const targetSub = Math.pow(norm(rawSub), 1.25);
+    const targetSub = Math.pow(norm(rawSub), this.activeSource === "mic" ? 1.15 : 1.25);
     const targetBass = norm(rawBass);
     const targetMid = norm(rawMid);
     const targetHigh = Math.min(1.0, norm(rawHigh) * 1.35);
@@ -383,12 +499,14 @@ class DSPEngine {
     avgFlux /= this.fluxHistory.length;
 
     const timeSinceLastBeat = now - this.lastBeatTime;
-    const fluxThreshold = Math.max(45, avgFlux * 1.48);
+    const fluxMult = this.activeSource === "mic" ? 1.25 : 1.48;
+    const fluxThreshold = Math.max(this.activeSource === "mic" ? 24 : 45, avgFlux * fluxMult);
+    const subThreshold = this.activeSource === "mic" ? 0.20 : 0.32;
 
     this.isBeat = false;
     if (
       lowFlux > fluxThreshold &&
-      this.envelopes.subBass > 0.32 &&
+      this.envelopes.subBass > subThreshold &&
       timeSinceLastBeat > 240 // Макс ~250 BPM захисту від подвійного спрацювання
     ) {
       this.isBeat = true;
@@ -462,6 +580,7 @@ class DSPEngine {
 
   stop() {
     this.isRunning = false;
+    this.micGainNode = null;
     if (this.synthTimer) {
       clearInterval(this.synthTimer);
       this.synthTimer = null;

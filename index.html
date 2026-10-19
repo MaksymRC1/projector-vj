@@ -246,6 +246,21 @@
 
     <!-- СЕКЦІЯ 2: PRO STUDIO CONTROLLER DECK -->
     <section class="mobile-vj-deck" id="mobileDeck" aria-label="Мобільний VJ Пульт">
+      <!-- Банер швидкого підключення мікрофона для мобільного пульта -->
+      <div class="mic-start-banner" id="micStartBanner">
+        <div class="mic-start-content">
+          <svg class="ico ico-pulse" viewBox="0 0 24 24">
+            <rect x="9" y="2" width="6" height="11" rx="3" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8" />
+          </svg>
+          <div class="mic-start-texts">
+            <strong>Синхронізація мікрофона</strong>
+            <span>Торкніться, щоб транслювати звук на проектор</span>
+          </div>
+        </div>
+        <button class="btn-mic-start" id="btnStartRemoteMic">СТАРТ 🎙️</button>
+      </div>
+
       <!-- Джерело аудіосигналу DSP -->
       <div class="deck-card source-strip">
         <div class="strip-header">
@@ -255,10 +270,16 @@
             </svg>
             AUDIO INPUT BUS (DSP)
           </span>
-          <label class="toggle-pill" title="Вимкнути/увімкнути звук синтезатора">
-            <input type="checkbox" id="chkSynthAudio" checked />
-            <span>SYNTH MONITOR</span>
-          </label>
+          <div class="strip-actions">
+            <button class="mic-boost-pill" id="btnMicBoost" title="Чутливість мікрофона (Boost x1 / x2.5 / x4.5)">
+              <svg class="ico" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span id="txtMicBoost">BOOST 2.5X</span>
+            </button>
+            <label class="toggle-pill" title="Вимкнути/увімкнути звук синтезатора">
+              <input type="checkbox" id="chkSynthAudio" checked />
+              <span>SYNTH MONITOR</span>
+            </label>
+          </div>
         </div>
         <div class="source-pills" id="sourceContainer">
           <button class="src-pill active" data-source="synth" tabindex="0">
@@ -276,6 +297,7 @@
               <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8" />
             </svg>
             <span>Mic Sensor</span>
+            <span class="mic-live-dot" id="micLiveDot" title="Активний захват аудіо"></span>
           </button>
           <button class="src-pill" data-source="native_android" tabindex="-1">
             <svg class="ico" viewBox="0 0 24 24">

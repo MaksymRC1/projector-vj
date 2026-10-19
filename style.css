@@ -179,6 +179,18 @@ body {
   box-shadow: 0 0 14px rgba(16, 185, 129, 0.4);
 }
 
+.room-pill.p2p-active {
+  border-color: rgba(0, 229, 255, 0.85);
+  background: rgba(0, 229, 255, 0.16);
+  color: #00e5ff;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.45);
+}
+
+.room-pill.p2p-active::before {
+  background: #00e5ff;
+  box-shadow: 0 0 6px #00e5ff;
+}
+
 .studio-link-pill {
   background: rgba(255, 87, 34, 0.12);
   border-color: rgba(255, 87, 34, 0.35);
@@ -436,6 +448,130 @@ body[data-view="remote"] .mobile-vj-deck {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.strip-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mic-boost-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent-signal);
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(255, 87, 34, 0.1);
+  border: 1px solid rgba(255, 87, 34, 0.35);
+  transition: all 0.15s ease;
+}
+
+.mic-boost-pill:hover {
+  background: rgba(255, 87, 34, 0.22);
+  border-color: rgba(255, 87, 34, 0.6);
+  color: #fff;
+}
+
+.mic-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #52525b;
+  display: inline-block;
+  margin-left: 2px;
+  transition: all 0.15s ease;
+}
+
+.mic-live-dot.live {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulseLiveDot 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseLiveDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* Банер запуску мікрофона на пульті */
+.mic-start-banner {
+  display: none;
+}
+
+body[data-view="remote"] .mic-start-banner:not(.active) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, rgba(255, 87, 34, 0.18), rgba(255, 152, 0, 0.1));
+  border: 1px solid rgba(255, 87, 34, 0.45);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 18px rgba(255, 87, 34, 0.2);
+  cursor: pointer;
+  animation: bannerFadeIn 0.3s ease-out;
+}
+
+.mic-start-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mic-start-content .ico-pulse {
+  width: 22px;
+  height: 22px;
+  stroke: var(--accent-signal);
+  animation: pulseIco 1.5s infinite ease-in-out;
+}
+
+.mic-start-texts {
+  display: flex;
+  flex-direction: column;
+}
+
+.mic-start-texts strong {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.mic-start-texts span {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
+
+.btn-mic-start {
+  padding: 6px 12px;
+  background: var(--accent-signal);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(255, 87, 34, 0.4);
+  white-space: nowrap;
+}
+
+@keyframes bannerFadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseIco {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255, 87, 34, 0.4)); }
+  50% { transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(255, 87, 34, 0.8)); }
 }
 
 .toggle-pill {

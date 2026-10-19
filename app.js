@@ -122,6 +122,10 @@ class AuraVJApp {
     const view = params.get("view");
     if (view && ["split", "projector", "remote"].includes(view)) {
       this.setView(view);
+      if (view === "remote") {
+        this.dsp.activeSource = "mic";
+        this.highlightSourceButton("mic");
+      }
     } else if (window.AndroidAudioBridge) {
       // Якщо запущено всередині Android APK на проекторі — одразу вмикаємо режим Проектора
       this.setView("projector");
@@ -163,6 +167,10 @@ class AuraVJApp {
     try {
       await this.dsp.start(source, file);
       this.audioStarted = true;
+      const banner = document.getElementById("micStartBanner");
+      if (banner && (source === "mic" || this.currentView === "remote")) {
+        banner.classList.add("active");
+      }
     } catch (err) {
       alert(`Увага: ${err.message}. Перемикаємо на вбудований Техно-Синтезатор.`);
       await this.dsp.start("synth");
@@ -205,6 +213,31 @@ class AuraVJApp {
         await this.ensureAudioStarted(src);
       });
     });
+
+    // Підсилювач чутливості мікрофона (Boost 1x -> 2.5x -> 4.5x)
+    const btnBoost = document.getElementById("btnMicBoost");
+    const txtBoost = document.getElementById("txtMicBoost");
+    const boostLevels = [1.0, 2.5, 4.5];
+    let boostIdx = 1;
+    if (btnBoost) {
+      btnBoost.addEventListener("click", () => {
+        boostIdx = (boostIdx + 1) % boostLevels.length;
+        const val = boostLevels[boostIdx];
+        this.dsp.setMicGain(val);
+        if (txtBoost) txtBoost.textContent = `BOOST ${val}X`;
+      });
+    }
+
+    // Банер швидкого увімкнення мікрофона на пульті смартфона
+    const btnStartRemoteMic = document.getElementById("btnStartRemoteMic");
+    const micBanner = document.getElementById("micStartBanner");
+    const activateMicHandler = async () => {
+      this.highlightSourceButton("mic");
+      await this.ensureAudioStarted("mic");
+      if (micBanner) micBanner.classList.add("active");
+    };
+    if (btnStartRemoteMic) btnStartRemoteMic.addEventListener("click", activateMicHandler);
+    if (micBanner) micBanner.addEventListener("click", activateMicHandler);
 
     fileInput.addEventListener("change", async (e) => {
       const file = e.target.files[0];
@@ -1412,10 +1445,13 @@ class AuraVJApp {
       const text = document.getElementById("roomCodeText");
       const studioBtn = document.getElementById("btnOpenStudio");
       if (text && msg.roomId) {
-        text.textContent = msg.roomId;
+        text.textContent = msg.p2p ? `${msg.roomId} ⚡` : msg.roomId;
         this.visualizer.roomId = msg.roomId;
       }
-      if (badge) badge.classList.toggle("online", !!msg.connected);
+      if (badge) {
+        badge.classList.toggle("online", !!msg.connected);
+        badge.classList.toggle("p2p-active", !!msg.p2p);
+      }
       if (studioBtn && msg.roomId) {
         studioBtn.href = `studio.html?room=${encodeURIComponent(msg.roomId)}`;
       }
@@ -1506,10 +1542,13 @@ class AuraVJApp {
 
     if (isLinked) {
       badge.classList.add("peer-linked");
-      badge.title = `Кімната ${this.sync.roomId}: З'єднано з ${role === "remote" ? "Пультом (iPhone)" : "Екраном (Проектор)"}!`;
-      text.textContent = `${this.sync.roomId} 🟢`;
+      badge.classList.toggle("p2p-active", !!this.sync.p2pConnected);
+      const connSuffix = this.sync.p2pConnected ? " ⚡ P2P" : " 🟢";
+      badge.title = `Кімната ${this.sync.roomId}: З'єднано з ${role === "remote" ? "Пультом (iPhone)" : "Екраном (Проектор)"}!${this.sync.p2pConnected ? " (Швидкісний WebRTC канал <15ms)" : ""}`;
+      text.textContent = `${this.sync.roomId}${connSuffix}`;
     } else {
       badge.classList.remove("peer-linked");
+      badge.classList.remove("p2p-active");
       badge.title = `Кімната ${this.sync.roomId}: Очікування підключення другого пристрою`;
       text.textContent = this.sync.roomId;
     }
@@ -1519,7 +1558,12 @@ class AuraVJApp {
     requestAnimationFrame((t) => this.loop(t));
 
     let dspState;
-    if (this.audioStarted) {
+    const hasLiveRemote =
+      this.dsp.activeSource === "remote" &&
+      this.dsp.lastRemoteTelemetryTime &&
+      now - this.dsp.lastRemoteTelemetryTime < 2500;
+
+    if (this.audioStarted || hasLiveRemote) {
       dspState = this.dsp.update(now);
     } else {
       const t = now / 1000;
@@ -1542,21 +1586,29 @@ class AuraVJApp {
     if (this.currentView === "remote" && this.audioStarted) {
       this.sync.send({
         type: "dspTelemetry",
-        state: {
-          subBass: dspState.subBass,
-          bass: dspState.bass,
-          mid: dspState.mid,
-          high: dspState.high,
-          isBeat: dspState.isBeat,
-          beatIntensity: dspState.beatIntensity,
-          beatCount: dspState.beatCount,
-          bpm: dspState.bpm,
-          beatPhase: dspState.beatPhase,
-        },
+        state: [
+          Math.round(dspState.subBass * 100) / 100,
+          Math.round(dspState.bass * 100) / 100,
+          Math.round(dspState.mid * 100) / 100,
+          Math.round(dspState.high * 100) / 100,
+          Math.round(dspState.beatIntensity * 100) / 100,
+          dspState.bpm || 128,
+          Math.round(dspState.beatPhase * 100) / 100,
+          dspState.isBeat ? 1 : 0,
+        ],
       });
     }
 
     this.visualizer.render(dspState, now);
+
+    // Оновлюємо пульсацію активного мікрофона на пульті
+    const micDot = document.getElementById("micLiveDot");
+    if (micDot) {
+      micDot.classList.toggle(
+        "live",
+        this.audioStarted && this.dsp.activeSource === "mic"
+      );
+    }
 
     // Оновлюємо індикатори Audio-CHOP матриці
     for (const [key, val] of Object.entries(this.visualizer.effectivePostFx)) {
