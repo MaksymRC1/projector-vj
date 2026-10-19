@@ -33,8 +33,8 @@ jobs:
 
       - name: Copy WebGL & DSP Assets into Android App
         run: |
-          mkdir -p android/app/src/main/assets
           cp index.html studio.html manifest.json style.css dsp-engine.js shader-visualizer.js sync-manager.js app.js studio.js android/app/src/main/assets/
+          if [ -f cert/keystore.p12 ]; then cp cert/keystore.p12 android/app/src/main/assets/; fi
 
       - name: Build Android Projector APK
         working-directory: ./android

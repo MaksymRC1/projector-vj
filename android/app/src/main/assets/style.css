@@ -1,0 +1,2046 @@
+:root {
+  --bg-obsidian: #070709;
+  --bg-elevated: #0d0d11;
+  --glass-surface: rgba(20, 20, 25, 0.72);
+  --glass-card: rgba(26, 26, 32, 0.64);
+  --glass-active: linear-gradient(180deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.05) 100%);
+  --border-hairline: rgba(255, 255, 255, 0.08);
+  --border-active: rgba(255, 255, 255, 0.32);
+  --specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --text-primary: #f4f4f6;
+  --text-secondary: #a1a1aa;
+  --text-muted: #63636b;
+  --accent-signal: #ff5722; /* Teenage Engineering Field Orange */
+  --accent-emerald: #10b981;
+  --accent-ice: #e4e4e7;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button *,
+a *,
+.xy-pad * {
+  pointer-events: none;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100dvh;
+  background: var(--bg-obsidian);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  letter-spacing: -0.012em;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* ВЕКТОРНІ SVG ІКОНКИ */
+.ico {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  flex-shrink: 0;
+}
+
+.ico-lg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ВЕРХНЯ ПАНЕЛЬ СТАТУСУ (PRO STUDIO TOP BAR) */
+.top-bar {
+  height: 48px;
+  min-height: 48px;
+  padding: 0 10px;
+  background: rgba(10, 10, 13, 0.84);
+  border-bottom: 1px solid var(--border-hairline);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  z-index: 50;
+  backdrop-filter: blur(24px) saturate(140%);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.top-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.brand-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.06s ease-out, background-color 0.06s, box-shadow 0.06s;
+  flex-shrink: 0;
+}
+
+.pulse-dot.beat-hit {
+  transform: scale(1.45);
+  background: var(--accent-signal);
+  box-shadow: 0 0 10px rgba(255, 87, 34, 0.75);
+}
+
+.brand-title {
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.brand-title strong {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.64rem;
+  color: var(--text-secondary);
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-hairline);
+  margin-left: 2px;
+}
+
+.bpm-pill,
+.room-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.room-pill:hover,
+.studio-link-pill:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.room-pill.online {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: var(--text-primary);
+}
+
+.room-pill.online::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+.room-pill.online.peer-linked::before {
+  background: var(--accent-emerald);
+  box-shadow: 0 0 6px var(--accent-emerald);
+}
+
+.room-pill.peer-linked {
+  border-color: rgba(16, 185, 129, 0.75);
+  background: rgba(16, 185, 129, 0.16);
+  color: #10b981;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.4);
+}
+
+.room-pill.p2p-active {
+  border-color: rgba(0, 229, 255, 0.85);
+  background: rgba(0, 229, 255, 0.16);
+  color: #00e5ff;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.45);
+}
+
+.room-pill.p2p-active::before {
+  background: #00e5ff;
+  box-shadow: 0 0 6px #00e5ff;
+}
+
+.studio-link-pill {
+  background: rgba(255, 87, 34, 0.12);
+  border-color: rgba(255, 87, 34, 0.35);
+  color: #ff8a65;
+}
+
+.monitor-btn.active {
+  border-color: rgba(255, 87, 34, 0.45);
+  background: rgba(255, 87, 34, 0.14);
+  color: #ff8a65;
+}
+
+.view-switcher {
+  display: flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--border-hairline);
+  flex-shrink: 0;
+}
+
+.view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.view-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  box-shadow: var(--specular-top);
+}
+
+/* РЕЖИМИ ВІДОБРАЖЕННЯ (SPLIT / PROJECTOR / REMOTE) */
+body[data-view="split"] .projector-stage {
+  height: 35dvh;
+  min-height: 185px;
+}
+
+body[data-view="split"] .projector-dock {
+  display: none;
+}
+
+body[data-view="split"] .mobile-vj-deck {
+  flex: 1;
+  display: flex;
+}
+
+body[data-view="projector"] .projector-stage {
+  height: calc(100dvh - 48px);
+}
+
+body[data-view="projector"] .mobile-vj-deck {
+  display: none;
+}
+
+body[data-view="remote"] .projector-stage {
+  height: 68px;
+  min-height: 68px;
+}
+
+body[data-view="remote"] .projector-dock {
+  display: none;
+}
+
+body[data-view="remote"] .mobile-vj-deck {
+  flex: 1;
+  display: flex;
+}
+
+/* СЕКЦІЯ 1: ПРОЕКТОР ТА WEBGL СЦЕНА */
+.projector-stage {
+  position: relative;
+  width: 100%;
+  background: #000000;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+#shaderCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.td-overlay-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* 4-СМУГОВИЙ ТЕХНІЧНИЙ DSP ІНДИКАТОР ЧАСТОТ */
+.dsp-telemetry-hud {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(10, 10, 14, 0.68);
+  border: 1px solid var(--border-hairline);
+  backdrop-filter: blur(16px);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.band-meter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 20px;
+  height: 38px;
+  justify-content: flex-end;
+}
+
+.band-fill {
+  width: 6px;
+  height: 12%;
+  border-radius: 2px;
+  transition: height 0.04s linear;
+  background: var(--text-primary);
+}
+
+.band-fill.sub {
+  background: var(--accent-signal);
+}
+.band-fill.bass {
+  background: #f4f4f6;
+}
+.band-fill.mid {
+  background: #a1a1aa;
+}
+.band-fill.high {
+  background: #71717a;
+}
+
+.band-meter span {
+  font-family: var(--font-mono);
+  font-size: 0.48rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* VISIONOS SPATIAL GLASS DOCK НА ПРОЕКТОРІ */
+.projector-dock {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 16px;
+  background: rgba(16, 16, 20, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), var(--specular-top);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  max-width: 95vw;
+  overflow-x: auto;
+  z-index: 20;
+}
+
+.projector-dock.hud-hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+  pointer-events: none;
+}
+
+.dock-item {
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  border-radius: 10px;
+  padding: 7px 11px;
+  min-width: 66px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.dock-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+}
+
+.dock-item.active,
+.dock-item:focus-visible {
+  background: var(--glass-active);
+  border-color: var(--border-active);
+  color: var(--text-primary);
+  box-shadow: var(--specular-top);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.dock-label {
+  font-size: 0.64rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* СЕКЦІЯ 2: PRO STUDIO CONTROLLER DECK */
+.mobile-vj-deck {
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-obsidian);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-vj-deck > * {
+  flex-shrink: 0;
+}
+
+.deck-card {
+  background: var(--glass-card);
+  border: 1px solid var(--border-hairline);
+  border-radius: 12px;
+  padding: 10px 12px;
+  backdrop-filter: blur(20px);
+  box-shadow: var(--specular-top);
+}
+
+.strip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.strip-title {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.strip-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mic-boost-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent-signal);
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(255, 87, 34, 0.1);
+  border: 1px solid rgba(255, 87, 34, 0.35);
+  transition: all 0.15s ease;
+}
+
+.mic-boost-pill:hover {
+  background: rgba(255, 87, 34, 0.22);
+  border-color: rgba(255, 87, 34, 0.6);
+  color: #fff;
+}
+
+.mic-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #52525b;
+  display: inline-block;
+  margin-left: 2px;
+  transition: all 0.15s ease;
+}
+
+.mic-live-dot.live {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulseLiveDot 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseLiveDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* Банер запуску мікрофона на пульті */
+.mic-start-banner {
+  display: none;
+}
+
+body[data-view="remote"] .mic-start-banner:not(.active) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, rgba(255, 87, 34, 0.18), rgba(255, 152, 0, 0.1));
+  border: 1px solid rgba(255, 87, 34, 0.45);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 18px rgba(255, 87, 34, 0.2);
+  cursor: pointer;
+  animation: bannerFadeIn 0.3s ease-out;
+}
+
+.mic-start-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mic-start-content .ico-pulse {
+  width: 22px;
+  height: 22px;
+  stroke: var(--accent-signal);
+  animation: pulseIco 1.5s infinite ease-in-out;
+}
+
+.mic-start-texts {
+  display: flex;
+  flex-direction: column;
+}
+
+.mic-start-texts strong {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.mic-start-texts span {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
+
+.btn-mic-start {
+  padding: 6px 12px;
+  background: var(--accent-signal);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(255, 87, 34, 0.4);
+  white-space: nowrap;
+}
+
+@keyframes bannerFadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseIco {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255, 87, 34, 0.4)); }
+  50% { transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(255, 87, 34, 0.8)); }
+}
+
+.toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-hairline);
+}
+
+.toggle-pill input {
+  accent-color: var(--accent-signal);
+}
+
+.source-pills {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.src-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-hairline);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-secondary);
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.src-pill:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.src-pill.active,
+.src-pill:focus-visible {
+  background: var(--glass-active);
+  border-color: var(--border-active);
+  color: var(--text-primary);
+  box-shadow: var(--specular-top);
+  outline: none;
+}
+
+/* ВКЛАДКИ ІНСТРУМЕНТІВ СТУДІЇ */
+.studio-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+  background: var(--bg-elevated);
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--border-hairline);
+  flex-shrink: 0;
+}
+
+.studio-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 7px 4px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-tab:hover {
+  color: var(--text-secondary);
+}
+
+.studio-tab.active {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--text-primary);
+  box-shadow: var(--specular-top);
+}
+
+.studio-panel {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.studio-panel.active {
+  display: flex;
+}
+
+/* СІТКА 3x3 ТАКТИЛЬНИХ ПЕДІВ СЦЕН (TEENAGE ENGINEERING × VISIONOS) */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.vj-pad {
+  position: relative;
+  background: rgba(22, 22, 27, 0.75);
+  border: 1px solid var(--border-hairline);
+  border-radius: 10px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.vj-pad:hover {
+  background: rgba(32, 32, 40, 0.85);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--text-primary);
+}
+
+/* Точковий світлодіод статусу у верхньому правому куті педа */
+.vj-pad::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  transition: all 0.15s ease;
+}
+
+.vj-pad.active,
+.vj-pad:focus-visible {
+  background: var(--glass-active);
+  border-color: var(--border-active);
+  color: var(--text-primary);
+  box-shadow: var(--specular-top);
+  outline: none;
+}
+
+.vj-pad.active::after {
+  background: var(--accent-signal);
+  box-shadow: 0 0 8px var(--accent-signal);
+}
+
+.pad-top-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.pad-code {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.pad-name {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.pad-sub {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  color: var(--text-muted);
+}
+
+.custom-vj-pad::after {
+  background: var(--accent-emerald);
+}
+
+/* XY MORPH TOUCHPAD (PRECISION INSTRUMENT) */
+.xy-pad-wrapper {
+  flex: 0 0 auto;
+  height: 116px;
+  min-height: 116px;
+  display: flex;
+}
+
+.xy-pad {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 112px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.03), rgba(8, 8, 11, 0.96)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 24px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 24px
+    );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 2px 16px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* Центральні прицільні осі XY */
+.xy-pad::before,
+.xy-pad::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+.xy-pad::before {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.xy-pad::after {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.xy-axis-label {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.xy-axis-label.top {
+  top: 8px;
+  left: 12px;
+}
+
+.xy-axis-label.bottom {
+  bottom: 8px;
+  right: 12px;
+}
+
+.xy-puck {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  margin-top: -14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1.5px solid var(--text-primary);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.xy-puck::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-signal);
+}
+
+.xy-puck-ring {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+/* 4 ТАКТИЛЬНІ КЛАВІШІ TRG-FX (TEENAGE ENGINEERING SYNTH KEYS) */
+.fx-row {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.fx-btn {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 8px 8px;
+  background: linear-gradient(180deg, rgba(30, 30, 36, 0.96) 0%, rgba(18, 18, 22, 0.98) 100%);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  box-shadow: var(--specular-top), 0 4px 10px rgba(0, 0, 0, 0.45);
+  transition: all 0.08s ease;
+}
+
+.fx-btn:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.fx-btn small {
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.fx-btn-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  color: var(--text-secondary);
+}
+
+.fx-btn.active,
+.fx-btn:active {
+  transform: translateY(1px);
+  background: var(--text-primary);
+  color: #09090b;
+  border-color: #ffffff;
+}
+
+.fx-btn.active small,
+.fx-btn:active small,
+.fx-btn.active .fx-btn-head,
+.fx-btn:active .fx-btn-head {
+  color: #27272a;
+}
+
+/* FILMORA FX PRESET CHIPS & STUDIO HARDWARE FADERS */
+.fx-preset-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+.fx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border-hairline);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  font-weight: 500;
+  padding: 5px 11px;
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.fx-chip:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+}
+
+.fx-chip.active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--border-active);
+  color: var(--text-primary);
+  box-shadow: var(--specular-top);
+}
+
+.fx-sliders-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.fx-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fx-slider-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.fx-slider-label strong {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* АПАРАТНІ ФЕЙДЕРИ (TEENAGE ENGINEERING TX-6 STYLE) */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 18px;
+  border-radius: 3px;
+  background: #f4f4f6;
+  border: 1px solid #09090b;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+/* TOUCHDESIGNER AUDIO-CHOP MATRIX */
+.td-hint {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.td-header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.mini-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border-hairline);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.mini-action-btn:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mini-action-btn.save {
+  background: rgba(255, 87, 34, 0.14);
+  border-color: rgba(255, 87, 34, 0.4);
+  color: #ff8a65;
+}
+
+.chop-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.chop-row {
+  display: grid;
+  grid-template-columns: 112px 1fr 72px;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--border-hairline);
+}
+
+.chop-param {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.chop-select {
+  background: #0d0d11;
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  padding: 4px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.63rem;
+}
+
+.chop-meter {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.chop-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--text-primary);
+  transition: width 0.05s linear;
+}
+
+.user-presets-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+/* MEDIA TOP (ВІДЕО / ФОТО / КАМЕРА) */
+.media-buttons-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.media-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 10px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.media-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.media-btn.active {
+  background: var(--glass-active);
+  border-color: var(--accent-signal);
+  color: #fff;
+}
+
+/* МОДАЛЬНЕ ВІКНО QR КОДУ ТА ПАРИНГУ */
+.qr-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(20px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.qr-modal[hidden] {
+  display: none;
+}
+
+.qr-card {
+  background: #111116;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), var(--specular-top);
+}
+
+.qr-card h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.qr-card p {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+
+.qr-box {
+  width: 184px;
+  height: 184px;
+  margin: 0 auto 14px;
+  background: #fff;
+  padding: 10px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-box img {
+  width: 100%;
+  height: 100%;
+}
+
+.room-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.room-input-row input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  user-select: text;
+}
+
+.join-room-btn {
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.remote-url {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-hairline);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  word-break: break-all;
+}
+
+.close-modal-btn {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: var(--text-primary);
+  color: #09090b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* PRO BADGE, VIDEO RECORDER & COMMERCIAL MODAL */
+.pro-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.pro-status-pill.is-pro {
+  background: linear-gradient(135deg, rgba(0, 245, 212, 0.22), rgba(255, 87, 34, 0.22));
+  border-color: #00f5d4;
+  color: #00f5d4;
+  box-shadow: 0 0 12px rgba(0, 245, 212, 0.25);
+}
+
+.rec-pill {
+  border-color: rgba(255, 87, 34, 0.35);
+  color: var(--text-primary);
+}
+
+.rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff3b30;
+  display: inline-block;
+}
+
+.rec-pill.recording {
+  background: rgba(255, 59, 48, 0.2);
+  border-color: #ff3b30;
+  color: #ff6961;
+  animation: recPulse 1s infinite alternate;
+}
+
+@keyframes recPulse {
+  from {
+    box-shadow: 0 0 4px rgba(255, 59, 48, 0.3);
+  }
+  to {
+    box-shadow: 0 0 14px rgba(255, 59, 48, 0.85);
+  }
+}
+
+.pro-venue-box {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.venue-inputs-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.venue-inputs-row input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 7px 9px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  user-select: text;
+}
+
+.pro-modal-card {
+  max-width: 400px;
+}
+
+.pro-modal-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: rgba(0, 245, 212, 0.14);
+  border: 1px solid rgba(0, 245, 212, 0.4);
+  color: #00f5d4;
+  margin-bottom: 8px;
+}
+
+.pro-plans-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.pro-plan-card {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.pro-plan-card.featured {
+  border-color: #00f5d4;
+  background: rgba(0, 245, 212, 0.07);
+}
+
+.plan-tag {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  background: #00f5d4;
+  color: #050507;
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.plan-name {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.plan-price {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.plan-price small {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.plan-sub {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+.pro-accent-btn {
+  background: #00f5d4 !important;
+  color: #050507 !important;
+  border-color: #00f5d4 !important;
+  font-weight: 700;
+}
+
+.pro-demo-btn {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 87, 34, 0.5);
+  background: rgba(255, 87, 34, 0.15);
+  color: #ff8a65;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pro-demo-btn:hover {
+  background: rgba(255, 87, 34, 0.25);
+}
+
+.vj-pad.pro-locked .pad-code::after {
+  content: " · PRO";
+  color: #00f5d4;
+}
+
+@media (max-width: 440px) {
+  .source-pills,
+  .venue-inputs-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ==========================================================================
+   АДАПТАЦІЯ ПУЛЬТА ПІД DESKTOP (PRO VJ WORKSTATION & HARDWARE CONSOLE)
+   ========================================================================== */
+
+/* 1. Кастомний темний скролбар для десктопу */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.25);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* 2. Апаратні моноширинні бейджі гарячих клавіш (Hardware Keycaps) */
+.kbd-hint {
+  display: none;
+}
+
+.desktop-only-tab {
+  display: none !important;
+}
+
+@media (min-width: 900px) {
+  .kbd-hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 0.52rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-bottom: 1.5px solid rgba(255, 255, 255, 0.24);
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: auto;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  .vj-pad:hover .kbd-hint,
+  .fx-btn:hover .kbd-hint,
+  .studio-tab:hover .kbd-hint {
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .vj-pad.active .kbd-hint,
+  .fx-btn.active .kbd-hint {
+    background: rgba(0, 0, 0, 0.3);
+    color: #09090b;
+    border-color: rgba(0, 0, 0, 0.4);
+  }
+
+  .studio-tab.active .kbd-hint {
+    background: rgba(255, 87, 34, 0.2);
+    color: #ff8a65;
+    border-color: rgba(255, 87, 34, 0.4);
+  }
+}
+
+/* 3. Живий бейдж координат XY Touchpad */
+.xy-coords-badge {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(10, 10, 14, 0.72);
+  border: 1px solid var(--border-hairline);
+  padding: 2px 7px;
+  border-radius: 5px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(8px);
+}
+
+/* 4. Тонке керування слайдерами мишею на десктопі */
+@media (hover: hover) and (pointer: fine) {
+  .fx-range {
+    cursor: ew-resize;
+    transition: background 0.15s ease;
+  }
+
+  .fx-range:hover {
+    background: rgba(255, 255, 255, 0.24);
+  }
+
+  .fx-slider-row:hover .fx-slider-label {
+    color: var(--text-primary);
+  }
+
+  .fx-range::-webkit-slider-thumb:hover {
+    transform: scale(1.18);
+    box-shadow: 0 0 10px rgba(255, 87, 34, 0.6);
+  }
+}
+
+/* 5. Модальне вікно довідки гарячих клавіш десктопу */
+.shortcuts-card {
+  max-width: 640px !important;
+  text-align: left !important;
+  padding: 24px 28px !important;
+}
+
+.shortcuts-header {
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-hairline);
+  padding-bottom: 12px;
+}
+
+.shortcuts-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+}
+
+.shortcuts-title-row h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.shortcuts-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 600px) {
+  .shortcuts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shortcut-group-title {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent-signal);
+  letter-spacing: 0.08em;
+  display: block;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.shortcut-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.shortcut-item kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  line-height: 1.1;
+}
+
+/* 6. ДЕСКТОП РОЗКЛАДКА: SPLIT РЕЖИМ (ПРОЕКТОР ЗЛІВА + ПУЛЬТ СПРАВА) */
+@media (min-width: 1024px) {
+  body[data-view="split"] {
+    display: grid;
+    grid-template-columns: minmax(480px, 1.2fr) minmax(460px, 1fr);
+    grid-template-rows: 48px 1fr;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  body[data-view="split"] .top-bar {
+    grid-column: 1 / -1;
+  }
+
+  body[data-view="split"] .projector-stage {
+    grid-column: 1;
+    grid-row: 2;
+    height: 100% !important;
+    min-height: 0 !important;
+    border-bottom: none;
+    border-right: 1px solid var(--border-hairline);
+    position: relative;
+  }
+
+  body[data-view="split"] .projector-dock {
+    display: flex;
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    max-width: 90%;
+    overflow-x: auto;
+  }
+
+  body[data-view="split"] .mobile-vj-deck {
+    grid-column: 2;
+    grid-row: 2;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px 18px 24px;
+    border-left: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  /* 7. ДЕСКТОП РОЗКЛАДКА: REMOTE РЕЖИМ (ПРОФЕСІЙНИЙ VJ WORKSTATION) */
+  body[data-view="remote"] {
+    background: #08080c;
+  }
+
+  body[data-view="remote"] .projector-stage {
+    width: 420px;
+    max-width: calc(100vw - 48px);
+    height: 236px;
+    aspect-ratio: 16 / 9;
+    min-height: 0 !important;
+    margin: 14px auto 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 87, 34, 0.2);
+    background: #000000;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  body[data-view="remote"] .projector-stage::before {
+    content: "PROGRAM OUT · 1080p60";
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    z-index: 10;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #ff8a65;
+    background: rgba(10, 10, 15, 0.82);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 87, 34, 0.4);
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+  }
+
+  body[data-view="remote"] .projector-stage #dspHud {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    bottom: auto;
+    left: auto;
+    z-index: 10;
+    background: rgba(10, 10, 15, 0.82);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 4px 6px;
+    pointer-events: none;
+  }
+
+  body[data-view="remote"] .projector-stage.monitor-hidden {
+    display: none !important;
+  }
+
+  body[data-view="remote"] .mobile-vj-deck {
+    max-width: 1540px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 12px 24px 36px;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  /* 8. ДЕСКТОП-ВКЛАДКА "СЦЕНИ & XY" В ОДИНОЧНОМУ РЕЖИМІ (ПОВНЕ ЗАПОВНЕННЯ ЕКРАНА) */
+  #mobileDeck:not(.console-all-active) #tabScenes.active {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    gap: 18px;
+    align-items: stretch;
+    min-height: calc(100vh - 420px);
+  }
+
+  #mobileDeck:not(.console-all-active) #tabScenes.active .preset-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabScenes.active .vj-pad {
+    min-height: 95px;
+    padding: 16px 12px;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabScenes.active .xy-pad-wrapper {
+    height: 100%;
+    min-height: 420px;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabFilmoraFx.active {
+    max-width: 1280px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabFilmoraFx.active .fx-sliders-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    padding: 14px 0;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabTdNodes.active {
+    max-width: 1280px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabTdNodes.active .chop-matrix {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px 18px;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabMediaTop.active {
+    max-width: 1000px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* 9. ДЕСКТОП-РЕЖИМ "КОНСОЛЬ (ВСЕ)": 2-КОЛОНОЧНИЙ VJ ПУЛЬТ (1024px - 1399px) */
+  .desktop-only-tab {
+    display: inline-flex !important;
+  }
+
+  #mobileDeck.console-all-active .studio-tab[data-tab="tabAll"] {
+    background: rgba(255, 87, 34, 0.16);
+    border-color: rgba(255, 87, 34, 0.45);
+    color: #ff8a65;
+    box-shadow: var(--specular-top);
+  }
+
+  #mobileDeck.console-all-active .studio-panel {
+    display: flex !important;
+    flex: 0 0 auto;
+  }
+
+  #mobileDeck.console-all-active {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 16px 18px;
+    align-items: start;
+    max-width: 1440px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  #mobileDeck.console-all-active > .source-strip {
+    grid-column: 1 / -1;
+  }
+
+  #mobileDeck.console-all-active > .studio-tabs {
+    grid-column: 1 / -1;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes {
+    grid-column: 1;
+    display: flex !important;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .preset-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .vj-pad {
+    min-height: 80px;
+    padding: 10px 8px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .xy-pad-wrapper {
+    height: 240px;
+    min-height: 240px;
+  }
+
+  #mobileDeck.console-all-active > #tabFilmoraFx {
+    grid-column: 2;
+  }
+
+  #mobileDeck.console-all-active > #tabTdNodes {
+    grid-column: 2;
+  }
+
+  #mobileDeck.console-all-active > #tabMediaTop {
+    grid-column: 1;
+  }
+
+  #mobileDeck.console-all-active > .fx-row {
+    grid-column: 1 / -1;
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    background: rgba(7, 7, 9, 0.94);
+    backdrop-filter: blur(20px);
+    padding: 12px 0 6px;
+    border-top: 1px solid var(--border-hairline);
+  }
+
+  #mobileDeck.console-all-active > .fx-row .fx-btn {
+    min-height: 52px;
+    font-size: 13.5px;
+    font-weight: 700;
+  }
+}
+
+/* 10. АДАПТАЦІЯ ДЛЯ ШИРОКИХ ДЕСКТОП-МОНІТОРІВ (>= 1400px): 3-КОЛОНОЧНИЙ VJ WORKSTATION */
+@media (min-width: 1400px) {
+  body[data-view="remote"] .mobile-vj-deck {
+    max-width: 1720px;
+    padding: 14px 28px 40px;
+  }
+
+  #mobileDeck.console-all-active {
+    grid-template-columns: 1.15fr 1.25fr 1.05fr;
+    gap: 16px 20px;
+    align-items: start;
+    max-width: 1720px;
+  }
+
+  #mobileDeck.console-all-active > .source-strip {
+    grid-column: 1 / -1;
+  }
+
+  #mobileDeck.console-all-active > .studio-tabs {
+    grid-column: 1 / -1;
+  }
+
+  /* КОЛОНКА 1: 9 СЦЕН ТА XY ТАЧПАД */
+  #mobileDeck.console-all-active > #tabScenes {
+    grid-column: 1;
+    display: flex !important;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .preset-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 9px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .vj-pad {
+    min-height: 84px;
+    padding: 12px 10px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .xy-pad-wrapper {
+    height: 280px;
+    min-height: 280px;
+  }
+
+  /* КОЛОНКА 2: FILMORA FX РЕК ТА СЛАЙДЕРИ */
+  #mobileDeck.console-all-active > #tabFilmoraFx {
+    grid-column: 2;
+    display: flex !important;
+  }
+
+  #mobileDeck.console-all-active > #tabFilmoraFx .fx-studio-card {
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  #mobileDeck.console-all-active > #tabFilmoraFx .fx-sliders-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  /* КОЛОНКА 3: CHOP ROUTER ТА MEDIA TOP ВХІД */
+  #mobileDeck.console-all-active > #tabTdNodes {
+    grid-column: 3;
+    display: flex !important;
+  }
+
+  #mobileDeck.console-all-active > #tabTdNodes .td-patch-card {
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  #mobileDeck.console-all-active > #tabTdNodes .chop-matrix {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  #mobileDeck.console-all-active > #tabMediaTop {
+    grid-column: 3;
+    display: flex !important;
+  }
+
+  #mobileDeck.console-all-active > #tabMediaTop .media-top-card {
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  /* НИЖНЯ ПАНЕЛЬ МАСТЕР-ТРИГЕРІВ */
+  #mobileDeck.console-all-active > .fx-row {
+    grid-column: 1 / -1;
+  }
+
+  .source-pills {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .fx-btn {
+    padding: 12px 16px;
+    min-height: 54px;
+  }
+}

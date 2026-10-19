@@ -1,0 +1,1823 @@
+/**
+ * Головний контролер AURA VJ PRO (Проектор + Смартфон Пульт + TouchDesigner & Filmora FX Studio)
+ */
+class AuraVJApp {
+  constructor() {
+    this.dsp = new DSPEngine();
+    this.canvas = document.getElementById("shaderCanvas");
+    this.overlayCanvas = document.getElementById("tdOverlayCanvas");
+    this.visualizer = new ShaderVisualizer(this.canvas, this.overlayCanvas);
+    this.sync = new SyncManager((msg) => this.handleSyncMessage(msg));
+
+    this.currentView = "split"; // 'split' | 'projector' | 'remote'
+    this.hudTimeout = null;
+    this.audioStarted = false;
+    this.cameraStream = null;
+    this.wakeLock = null;
+    this.mediaRecorder = null;
+    this.recordedChunks = [];
+    this.userPresets = this.loadUserPresets();
+
+    // Комерційна модель: 4 сцени у FREE, 5 преміум-сцен у PRO
+    this.proScenes = ["blobtrack", "pointcloud", "reaction", "ferrofluid", "fractal"];
+    this.isPro = this.loadProStatus();
+    this.visualizer.isPro = this.isPro;
+    this.visualizer.roomId = this.sync.roomId;
+
+    this.initUrlParams();
+    this.setupUI();
+    this.setupProLicensing();
+    this.setupVideoRecorder();
+    this.setupVenueAndKeystone();
+    this.setupStudioTabs();
+    this.setupMonitorToggle();
+    this.setupFilmoraFX();
+    this.setupTouchDesignerCHOP();
+    this.setupMediaTop();
+    this.setupXYPad();
+    this.setupFXButtons();
+    this.loadSavedCustomEffects();
+    this.setupSpatialNavigation();
+    this.setupAutoHideHud();
+    this.setupDesktopShortcuts();
+    this.setupDesktopMouseInteractions();
+    this.setupPeerSyncHeartbeat();
+    this.requestScreenWakeLock();
+
+    // Запускаємо рендер-цикл одразу (навіть до першого кліку працює візуальне демо)
+    this.lastFrame = performance.now();
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  loadProStatus() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("pro") === "1") {
+      try {
+        localStorage.setItem("aura_vj_pro_active", "true");
+      } catch {}
+      return true;
+    }
+    try {
+      return localStorage.getItem("aura_vj_pro_active") === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  setProStatus(active, broadcast = true) {
+    this.isPro = !!active;
+    this.visualizer.isPro = this.isPro;
+    try {
+      localStorage.setItem("aura_vj_pro_active", this.isPro ? "true" : "false");
+    } catch {}
+    this.updateProUI();
+    if (broadcast) {
+      this.sync.send({ type: "proStatus", isPro: this.isPro });
+    }
+  }
+
+  updateProUI() {
+    const badge = document.getElementById("btnProBadge");
+    const badgeText = document.getElementById("proBadgeText");
+    const demoBtn = document.getElementById("btnInstantProDemo");
+    const desc = document.getElementById("proModalStatusDesc");
+
+    if (badge) badge.classList.toggle("is-pro", this.isPro);
+    if (badgeText) badgeText.textContent = this.isPro ? "💎 PRO" : "FREE";
+
+    document.querySelectorAll(".vj-pad[data-mode]").forEach((pad) => {
+      const mode = pad.dataset.mode;
+      const locked = !this.isPro && this.proScenes.includes(mode);
+      pad.classList.toggle("pro-locked", locked);
+    });
+
+    if (demoBtn) {
+      demoBtn.textContent = this.isPro
+        ? "🔄 Перемкнути назад у FREE Режим (для тесту)"
+        : "⚡ Увімкнути PRO Режим (Тестова Активація в 1 клік)";
+    }
+    if (desc) {
+      desc.textContent = this.isPro
+        ? "✅ Ліцензія AURA VJ PRO активна! Всі 9 сцен, B2B-вивіска, Keystone-маска та FX Lab розблоковані."
+        : "Розблокуйте всі 9 TouchDesigner сцен, 6-шаровий Filmora FX стек, B2B-вивіску для закладів, Keystone-маску та приберіть водяний знак.";
+    }
+  }
+
+  async requestScreenWakeLock() {
+    if ("wakeLock" in navigator) {
+      try {
+        this.wakeLock = await navigator.wakeLock.request("screen");
+      } catch {}
+    }
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState === "visible" && "wakeLock" in navigator) {
+        try {
+          this.wakeLock = await navigator.wakeLock.request("screen");
+        } catch {}
+      }
+    });
+  }
+
+  initUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get("view");
+    if (view && ["split", "projector", "remote"].includes(view)) {
+      this.setView(view);
+      if (view === "remote") {
+        this.dsp.activeSource = "mic";
+        this.highlightSourceButton("mic");
+      }
+    } else if (window.AndroidAudioBridge) {
+      // Якщо запущено всередині Android APK на проекторі — одразу вмикаємо режим Проектора
+      this.setView("projector");
+    }
+
+    // Глобальний хук для прийому системного звуку Android Visualizer(0) (YouTube Music / Cast)
+    window.onAndroidNativeFFT = (binsArray) => {
+      if (this.dsp.activeSource !== "native_android") {
+        this.dsp.activeSource = "native_android";
+        this.dsp.isRunning = true;
+        this.audioStarted = true;
+        this.highlightSourceButton("native_android");
+      }
+      this.dsp.ingestNativeAndroidBins(binsArray);
+    };
+
+    // Автоматичний fallback, якщо Android 12+ DRM блокує Visualizer(0)
+    window.onAndroidAudioFallback = (reason) => {
+      console.warn("Android Visualizer(0) fallback:", reason);
+      if (this.dsp.activeSource === "native_android") {
+        this.ensureAudioStarted("mic");
+        this.highlightSourceButton("mic");
+      }
+    };
+  }
+
+  setView(viewName) {
+    this.currentView = viewName;
+    document.body.dataset.view = viewName;
+    document.querySelectorAll(".view-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.targetView === viewName);
+    });
+    if (viewName === "projector") {
+      this.resetHudTimer();
+    } else if (viewName === "remote" && !this.audioStarted) {
+      this.dsp.activeSource = "mic";
+      this.highlightSourceButton("mic");
+    }
+  }
+
+  async ensureAudioStarted(source = "synth", file = null) {
+    try {
+      const res = await this.dsp.start(source, file);
+      if (res && res.aborted) return;
+      this.audioStarted = true;
+      const actualSource = (res && res.source) || source;
+      this.highlightSourceButton(actualSource === "screen" ? "native_android" : actualSource);
+      const banner = document.getElementById("micStartBanner");
+      if (banner && (actualSource === "mic" || this.currentView === "remote")) {
+        banner.classList.add("active");
+        const btn = document.getElementById("btnStartRemoteMic");
+        if (btn && actualSource === "mic") {
+          btn.textContent = "ТРАНСЛЮЄТЬСЯ 🟢";
+        }
+      }
+    } catch (err) {
+      if (err && err.isHttpsRequired && err.targetUrl) {
+        if (
+          confirm(
+            "Для доступу до мікрофона на iPhone / Android потрібне захищене з'єднання (HTTPS).\n\nПерейти на HTTPS (порт 3457) прямо зараз?"
+          )
+        ) {
+          window.location.href = err.targetUrl;
+          return;
+        }
+      }
+      alert(`Увага: ${err.message}. Перемикаємо на вбудований Техно-Синтезатор.`);
+      const res = await this.dsp.start("synth");
+      if (res && res.aborted) return;
+      this.audioStarted = true;
+      this.highlightSourceButton("synth");
+    }
+  }
+
+  setupUI() {
+    const roomTextEl = document.getElementById("roomCodeText");
+    if (roomTextEl) roomTextEl.textContent = this.sync.roomId;
+
+    if (window.AndroidAudioBridge) {
+      if (typeof window.AndroidAudioBridge.getProjectorIp === "function") {
+        const projIp = window.AndroidAudioBridge.getProjectorIp();
+        if (projIp && projIp !== "127.0.0.1") {
+          this.sync.setServerHost(`${projIp}:3456`);
+        }
+      }
+      this.ensureAudioStarted("native_android");
+    }
+
+    const unlockAudio = (e) => {
+      const target = e?.target;
+      // Ігноруємо кліки по кнопках джерел звуку, перемикачах режимів та модалках, щоб уникнути подвійного виклику start()
+      if (
+        target instanceof Element &&
+        target.closest(
+          ".src-pill, #micStartBanner, #btnStartRemoteMic, .view-btn, #btnQrModal, #btnRoomBadge, #btnFullscreen, #qrModal, #proModal, #shortcutsModal"
+        )
+      ) {
+        return;
+      }
+      // На екрані Проектора або при активному прийомі телеметрії з Пульта НЕ запускаємо локальний синтезатор!
+      if (this.currentView === "projector" || this.dsp.activeSource === "remote") {
+        return;
+      }
+      if (!this.audioStarted) {
+        this.ensureAudioStarted(this.dsp.activeSource);
+      }
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+    window.addEventListener("pointerdown", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
+
+    document.querySelectorAll(".view-btn").forEach((btn) => {
+      btn.addEventListener("click", () => this.setView(btn.dataset.targetView));
+    });
+
+    const fileInput = document.getElementById("audioFileInput");
+    document.querySelectorAll(".src-pill").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const src = btn.dataset.source;
+        if (src === "file") {
+          fileInput.click();
+          return;
+        }
+        this.highlightSourceButton(src);
+        await this.ensureAudioStarted(src);
+      });
+    });
+
+    // Підсилювач чутливості мікрофона (Boost 1x -> 2.5x -> 4.5x)
+    const btnBoost = document.getElementById("btnMicBoost");
+    const txtBoost = document.getElementById("txtMicBoost");
+    const boostLevels = [1.0, 2.5, 4.5];
+    let boostIdx = 1;
+    if (btnBoost) {
+      btnBoost.addEventListener("click", () => {
+        boostIdx = (boostIdx + 1) % boostLevels.length;
+        const val = boostLevels[boostIdx];
+        this.dsp.setMicGain(val);
+        if (txtBoost) txtBoost.textContent = `BOOST ${val}X`;
+      });
+    }
+
+    // Банер швидкого увімкнення мікрофона на пульті смартфона (без подвійного спрацювання)
+    const micBanner = document.getElementById("micStartBanner");
+    const btnStartRemoteMic = document.getElementById("btnStartRemoteMic");
+
+    if (micBanner) {
+      if (!window.isSecureContext && location.protocol === "http:") {
+        const bannerText = micBanner.querySelector(".mic-start-texts span");
+        if (bannerText) {
+          bannerText.textContent = "Натисніть для переходу на HTTPS (порт 3457) для роботи мікрофона";
+        }
+        if (btnStartRemoteMic) {
+          btnStartRemoteMic.textContent = "HTTPS 3457 🔒";
+        }
+      }
+
+      const activateMicHandler = async (e) => {
+        if (e) e.stopPropagation();
+        if (!window.isSecureContext && location.protocol === "http:") {
+          window.location.href = `https://${location.hostname}:3457${location.pathname}${location.search}`;
+          return;
+        }
+        this.highlightSourceButton("mic");
+        await this.ensureAudioStarted("mic");
+        if (micBanner) micBanner.classList.add("active");
+        if (btnStartRemoteMic) btnStartRemoteMic.textContent = "ТРАНСЛЮЄТЬСЯ 🟢";
+      };
+
+      micBanner.addEventListener("click", activateMicHandler);
+      if (btnStartRemoteMic) btnStartRemoteMic.addEventListener("click", activateMicHandler);
+    }
+
+    fileInput.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        this.highlightSourceButton("file");
+        await this.ensureAudioStarted("file", file);
+      }
+    });
+
+    const chkSynth = document.getElementById("chkSynthAudio");
+    chkSynth.addEventListener("change", (e) => {
+      this.dsp.setSynthMute(!e.target.checked);
+    });
+
+    const selectMode = (mode) => {
+      if (!this.isPro && this.proScenes.includes(mode)) {
+        const proModal = document.getElementById("proModal");
+        if (proModal) proModal.hidden = false;
+        return;
+      }
+      this.visualizer.setMode(mode);
+      this.highlightModeButtons(mode);
+      this.sync.send({ type: "mode", mode });
+    };
+    this.selectMode = selectMode;
+
+    document.querySelectorAll("[data-mode]").forEach((btn) => {
+      btn.addEventListener("click", () => selectMode(btn.dataset.mode));
+    });
+
+    const qrModal = document.getElementById("qrModal");
+    const openQrModal = () => {
+      this.renderQrModal();
+      qrModal.hidden = false;
+    };
+    document.getElementById("btnQrModal").addEventListener("click", openQrModal);
+    const btnRoomBadge = document.getElementById("btnRoomBadge");
+    if (btnRoomBadge) {
+      btnRoomBadge.addEventListener("click", openQrModal);
+    }
+    document.getElementById("btnCloseQr").addEventListener("click", () => {
+      qrModal.hidden = true;
+    });
+    const btnJoinRoom = document.getElementById("btnJoinRoom");
+    const roomInput = document.getElementById("roomInput");
+    const submitJoin = () => {
+      const val = roomInput ? roomInput.value.trim() : "";
+      if (val) {
+        this.sync.setRoomId(val);
+        this.visualizer.roomId = this.sync.roomId;
+        this.renderQrModal();
+        this.sync.send({ type: "peerHeartbeat", role: this.currentView });
+        if (btnJoinRoom) btnJoinRoom.textContent = "CONNECTED!";
+        setTimeout(() => {
+          if (btnJoinRoom) btnJoinRoom.textContent = "CONNECT";
+          qrModal.hidden = true;
+        }, 500);
+      }
+    };
+    if (btnJoinRoom) {
+      btnJoinRoom.addEventListener("click", submitJoin);
+    }
+    if (roomInput) {
+      roomInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitJoin();
+        }
+      });
+    }
+
+    document.getElementById("btnFullscreen").addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+  }
+
+  /**
+   * Комерційна система ліцензування AURA VJ PRO
+   */
+  setupProLicensing() {
+    this.updateProUI();
+    const proModal = document.getElementById("proModal");
+    const btnProBadge = document.getElementById("btnProBadge");
+    const btnClosePro = document.getElementById("btnCloseProModal");
+    const btnActivateKey = document.getElementById("btnActivateKey");
+    const btnInstantPro = document.getElementById("btnInstantProDemo");
+    const keyInput = document.getElementById("proLicenseInput");
+
+    if (btnProBadge && proModal) {
+      btnProBadge.addEventListener("click", () => {
+        proModal.hidden = false;
+      });
+    }
+    if (btnClosePro && proModal) {
+      btnClosePro.addEventListener("click", () => {
+        proModal.hidden = true;
+      });
+    }
+    if (btnInstantPro) {
+      btnInstantPro.addEventListener("click", () => {
+        this.setProStatus(!this.isPro, true);
+      });
+    }
+    if (btnActivateKey && keyInput) {
+      btnActivateKey.addEventListener("click", () => {
+        const val = keyInput.value.trim().toUpperCase();
+        if (val.startsWith("AURA-") || val.startsWith("VIP-") || val.length >= 6) {
+          this.setProStatus(true, true);
+          keyInput.value = "";
+          if (proModal) proModal.hidden = true;
+        } else {
+          alert("Введіть дійсний ключ (наприклад, AURA-PRO-2026) або натисніть кнопку тестової активації нижче.");
+        }
+      });
+    }
+    document.querySelectorAll(".pro-plan-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        if (keyInput) keyInput.value = "AURA-PRO-2026";
+        this.setProStatus(true, true);
+      });
+    });
+  }
+
+  /**
+   * Вбудований 60 FPS відео-рекордер (WebGL + Audio) для TikTok / Instagram Reels
+   */
+  setupVideoRecorder() {
+    const btnRec = document.getElementById("btnRecordVideo");
+    const recText = document.getElementById("recBtnText");
+    if (!btnRec || !this.canvas) return;
+
+    btnRec.addEventListener("click", () => {
+      if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
+        this.mediaRecorder.stop();
+        return;
+      }
+
+      try {
+        const canvasStream = this.canvas.captureStream(60);
+        const tracks = [...canvasStream.getVideoTracks()];
+
+        if (this.dsp && this.dsp.ctx && this.dsp.masterGain) {
+          try {
+            const dest = this.dsp.ctx.createMediaStreamDestination();
+            this.dsp.masterGain.connect(dest);
+            tracks.push(...dest.stream.getAudioTracks());
+          } catch {}
+        }
+
+        const combinedStream = new MediaStream(tracks);
+        const mimeTypes = [
+          "video/mp4;codecs=avc1",
+          "video/webm;codecs=vp9,opus",
+          "video/webm;codecs=vp8,opus",
+          "video/webm",
+        ];
+        const mimeType = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) || "";
+
+        this.recordedChunks = [];
+        this.mediaRecorder = mimeType
+          ? new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 8000000 })
+          : new MediaRecorder(combinedStream);
+
+        this.mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) this.recordedChunks.push(e.data);
+        };
+
+        this.mediaRecorder.onstop = () => {
+          btnRec.classList.remove("recording");
+          if (recText) recText.textContent = "REC";
+          const blob = new Blob(this.recordedChunks, {
+            type: this.mediaRecorder.mimeType || "video/webm",
+          });
+          const ext = (this.mediaRecorder.mimeType || "").includes("mp4") ? "mp4" : "webm";
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `aura-vj-reel-${Date.now()}.${ext}`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        };
+
+        this.mediaRecorder.start(200);
+        btnRec.classList.add("recording");
+        if (recText) recText.textContent = "STOP";
+      } catch (err) {
+        alert(`Запис відео не підтримується у цьому браузері: ${err.message}`);
+      }
+    });
+  }
+
+  /**
+   * B2B Вивіска для барів/івентів + Keystone-маска стіни проектора
+   */
+  setupVenueAndKeystone() {
+    const chkVenue = document.getElementById("chkVenueOverlay");
+    const inputTitle = document.getElementById("inputVenueTitle");
+    const inputSub = document.getElementById("inputVenueSub");
+    const rangeScale = document.getElementById("rangeKeystoneScale");
+    const valScale = document.getElementById("val_keystoneScale");
+    const rangeCrop = document.getElementById("rangeKeystoneCrop");
+    const valCrop = document.getElementById("val_keystoneCrop");
+
+    const syncVenueAndKeystone = () => {
+      if (!this.isPro && chkVenue && chkVenue.checked) {
+        chkVenue.checked = false;
+        const proModal = document.getElementById("proModal");
+        if (proModal) proModal.hidden = false;
+        return;
+      }
+      this.visualizer.venueOverlay = {
+        enabled: chkVenue ? chkVenue.checked : false,
+        title: inputTitle ? inputTitle.value.trim() : "",
+        subtitle: inputSub ? inputSub.value.trim() : "",
+      };
+      this.visualizer.keystone = {
+        scale: rangeScale ? Number(rangeScale.value) / 100 : 1.0,
+        cropX: rangeCrop ? Number(rangeCrop.value) / 100 : 0.0,
+        cropY: rangeCrop ? Number(rangeCrop.value) / 100 : 0.0,
+      };
+      if (valScale && rangeScale) valScale.textContent = `${rangeScale.value}%`;
+      if (valCrop && rangeCrop) valCrop.textContent = `${rangeCrop.value}%`;
+
+      this.sync.send({
+        type: "venueKeystone",
+        venueOverlay: this.visualizer.venueOverlay,
+        keystone: this.visualizer.keystone,
+      });
+    };
+
+    [chkVenue, inputTitle, inputSub, rangeScale, rangeCrop].forEach((el) => {
+      if (!el) return;
+      el.addEventListener("input", syncVenueAndKeystone);
+      el.addEventListener("change", syncVenueAndKeystone);
+    });
+  }
+
+  /**
+   * Вкладки студії: Сцени & XY / Filmora FX / TouchDesigner CHOP Ноди / Відео & Камера / Консоль (Все)
+   */
+  setupStudioTabs() {
+    const deck = document.getElementById("mobileDeck");
+    const tabs = document.querySelectorAll(".studio-tab");
+    const panels = document.querySelectorAll(".studio-panel");
+
+    const activateTab = (targetId) => {
+      tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === targetId));
+      if (targetId === "tabAll") {
+        if (deck) deck.classList.add("console-all-active");
+        panels.forEach((p) => p.classList.add("active"));
+      } else {
+        if (deck) deck.classList.remove("console-all-active");
+        panels.forEach((p) => p.classList.toggle("active", p.id === targetId));
+      }
+    };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        activateTab(tab.dataset.tab);
+      });
+    });
+
+    // На десктопі (>= 1024px) за замовчуванням активуємо повноцінний VJ-пульт "Консоль (Все)"
+    if (window.innerWidth >= 1024) {
+      activateTab("tabAll");
+    }
+
+    let lastWidth = window.innerWidth;
+    window.addEventListener("resize", () => {
+      const isDesktopNow = window.innerWidth >= 1024;
+      const wasDesktop = lastWidth >= 1024;
+      if (isDesktopNow !== wasDesktop) {
+        lastWidth = window.innerWidth;
+        if (isDesktopNow) {
+          activateTab("tabAll");
+        } else {
+          activateTab("tabScenes");
+        }
+      }
+    });
+  }
+
+  /**
+   * Перемикання Live Program Monitor на пульті (сховати/показати)
+   */
+  toggleProgramMonitor() {
+    const stage = document.getElementById("projectorStage");
+    const btn = document.getElementById("btnToggleMonitor");
+    if (!stage) return;
+    stage.classList.toggle("monitor-hidden");
+    const isHidden = stage.classList.contains("monitor-hidden");
+    if (btn) {
+      btn.classList.toggle("active", !isHidden);
+      const txt = btn.querySelector("#monitorBtnText");
+      if (txt) txt.textContent = isHidden ? "MONITOR OFF" : "MONITOR";
+    }
+    setTimeout(() => this.visualizer?.onResize(), 60);
+  }
+
+  /**
+   * Керування кнопкою Live Program Monitor у верхній панелі
+   */
+  setupMonitorToggle() {
+    const btn = document.getElementById("btnToggleMonitor");
+    if (btn) {
+      btn.addEventListener("click", () => this.toggleProgramMonitor());
+    }
+  }
+
+  /**
+   * Конструктор шарів Filmora FX + Пресети комбінацій + TouchDesigner CV Blob HUD
+   */
+  setupFilmoraFX() {
+    const chkBlobHud = document.getElementById("chkBlobHud");
+    if (chkBlobHud) {
+      chkBlobHud.addEventListener("change", (e) => {
+        this.visualizer.blobHudEnabled = e.target.checked;
+        this.broadcastPostFxState();
+      });
+    }
+
+    document.querySelectorAll(".fx-range").forEach((slider) => {
+      slider.addEventListener("input", (e) => {
+        const name = slider.dataset.fx;
+        const pct = Number(e.target.value);
+        this.visualizer.setPostFx(name, pct / 100);
+        const label = document.getElementById(`val_${name}`);
+        if (label) label.textContent = `${pct}%`;
+        this.broadcastPostFxState();
+      });
+    });
+
+    const builtInPresets = {
+      clean: {
+        postFx: { rgbSplit: 0, glitch: 0, kaleido: 0, edges: 0, feedback: 0, pixelate: 0 },
+        blobHud: false,
+      },
+      vhs: {
+        postFx: { rgbSplit: 0.65, glitch: 0.58, kaleido: 0, edges: 0, feedback: 0.2, pixelate: 0 },
+        blobHud: false,
+      },
+      td_cv: {
+        postFx: { rgbSplit: 0.3, glitch: 0.15, kaleido: 0, edges: 0.65, feedback: 0.35, pixelate: 0 },
+        blobHud: true,
+      },
+      acid: {
+        postFx: { rgbSplit: 0.45, glitch: 0, kaleido: 0.65, edges: 0.25, feedback: 0.72, pixelate: 0 },
+        blobHud: false,
+      },
+      led: {
+        postFx: { rgbSplit: 0.25, glitch: 0.2, kaleido: 0, edges: 0, feedback: 0, pixelate: 0.68 },
+        blobHud: false,
+      },
+    };
+
+    document.querySelectorAll("[data-fx-preset]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const key = chip.dataset.fxPreset;
+        const preset = builtInPresets[key];
+        if (!preset) return;
+        document.querySelectorAll("[data-fx-preset]").forEach((c) =>
+          c.classList.toggle("active", c === chip)
+        );
+        this.applyPatchState({
+          postFx: preset.postFx,
+          blobHudEnabled: preset.blobHud,
+        });
+        this.broadcastPostFxState();
+      });
+    });
+  }
+
+  /**
+   * TouchDesigner Audio-CHOP Матриця маршрутизації + Генератор патчів + Збереження пресетів
+   */
+  setupTouchDesignerCHOP() {
+    document.querySelectorAll(".chop-select").forEach((sel) => {
+      sel.addEventListener("change", (e) => {
+        const name = sel.dataset.chop;
+        this.visualizer.setChopRoute(name, e.target.value);
+        this.broadcastPostFxState();
+      });
+    });
+
+    const btnRandom = document.getElementById("btnRandomPatch");
+    if (btnRandom) {
+      btnRandom.addEventListener("click", () => {
+        const sources = ["none", "subBass", "bass", "mid", "high", "lfo"];
+        const randomPostFx = {};
+        const randomChop = {};
+        Object.keys(this.visualizer.postFx).forEach((key) => {
+          const active = Math.random() > 0.42;
+          randomPostFx[key] = active ? Number((0.2 + Math.random() * 0.65).toFixed(2)) : 0;
+          randomChop[key] = active
+            ? sources[Math.floor(Math.random() * sources.length)]
+            : "none";
+        });
+        this.applyPatchState({
+          postFx: randomPostFx,
+          chopRouting: randomChop,
+          blobHudEnabled: Math.random() > 0.5,
+        });
+        this.broadcastPostFxState();
+      });
+    }
+
+    const btnSave = document.getElementById("btnSaveUserPreset");
+    if (btnSave) {
+      btnSave.addEventListener("click", () => {
+        const name = prompt(
+          "Назва вашого пресету (TouchDesigner / Filmora):",
+          `Мій Патч #${this.userPresets.length + 1}`
+        );
+        if (!name) return;
+        const entry = {
+          name: name.trim().slice(0, 22),
+          mode: this.visualizer.modes[this.visualizer.modeIndex],
+          postFx: { ...this.visualizer.postFx },
+          chopRouting: { ...this.visualizer.chopRouting },
+          blobHudEnabled: this.visualizer.blobHudEnabled,
+        };
+        this.userPresets.push(entry);
+        this.saveUserPresets();
+        this.renderUserPresets();
+      });
+    }
+
+    this.renderUserPresets();
+  }
+
+  loadUserPresets() {
+    try {
+      const raw = localStorage.getItem("aura_vj_user_presets");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  saveUserPresets() {
+    try {
+      localStorage.setItem("aura_vj_user_presets", JSON.stringify(this.userPresets));
+    } catch {
+      // Ігноруємо помилки quota
+    }
+  }
+
+  renderUserPresets() {
+    const bar = document.getElementById("userPresetsBar");
+    if (!bar) return;
+    bar.innerHTML = "";
+    this.userPresets.forEach((preset, idx) => {
+      const btn = document.createElement("button");
+      btn.className = "fx-chip";
+      btn.textContent = `[USR] ${preset.name}`;
+      btn.addEventListener("click", () => {
+        if (preset.mode) {
+          this.visualizer.setMode(preset.mode);
+          this.highlightModeButtons(preset.mode);
+          this.sync.send({ type: "mode", mode: preset.mode });
+        }
+        this.applyPatchState(preset);
+        this.broadcastPostFxState();
+      });
+      btn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        this.userPresets.splice(idx, 1);
+        this.saveUserPresets();
+        this.renderUserPresets();
+      });
+      bar.appendChild(btn);
+    });
+  }
+
+  applyPatchState(state) {
+    if (state.postFx) {
+      Object.entries(state.postFx).forEach(([k, val]) => {
+        this.visualizer.setPostFx(k, val);
+        const slider = document.querySelector(`.fx-range[data-fx="${k}"]`);
+        const label = document.getElementById(`val_${k}`);
+        const pct = Math.round(val * 100);
+        if (slider) slider.value = String(pct);
+        if (label) label.textContent = `${pct}%`;
+      });
+    }
+    if (state.chopRouting) {
+      Object.entries(state.chopRouting).forEach(([k, src]) => {
+        this.visualizer.setChopRoute(k, src);
+        const sel = document.querySelector(`.chop-select[data-chop="${k}"]`);
+        if (sel) sel.value = src;
+      });
+    }
+    if (typeof state.blobHudEnabled === "boolean") {
+      this.visualizer.blobHudEnabled = state.blobHudEnabled;
+      const chk = document.getElementById("chkBlobHud");
+      if (chk) chk.checked = state.blobHudEnabled;
+    }
+  }
+
+  broadcastPostFxState() {
+    this.sync.send({
+      type: "postFx",
+      postFx: this.visualizer.postFx,
+      chopRouting: this.visualizer.chopRouting,
+      blobHudEnabled: this.visualizer.blobHudEnabled,
+    });
+  }
+
+  /**
+   * Media TOP: Завантаження власного Відео / Фото або підключення Живої Камери під шейдери
+   */
+  setupMediaTop() {
+    const btnUpload = document.getElementById("btnUploadMedia");
+    const btnCamera = document.getElementById("btnLiveCamera");
+    const btnClear = document.getElementById("btnClearMedia");
+    const mediaInput = document.getElementById("mediaFileInput");
+    const videoEl = document.getElementById("customVideoEl");
+    const imgEl = document.getElementById("customImageEl");
+    const rangeMix = document.getElementById("rangeMediaMix");
+    const valMix = document.getElementById("val_mediaMix");
+
+    const updateMixUI = (pct) => {
+      this.visualizer.mediaMix = pct / 100;
+      if (rangeMix) rangeMix.value = String(pct);
+      if (valMix) valMix.textContent = `${pct}%`;
+    };
+
+    if (btnUpload && mediaInput) {
+      btnUpload.addEventListener("click", () => mediaInput.click());
+      mediaInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.stopCameraStream();
+        const url = URL.createObjectURL(file);
+
+        if (file.type.startsWith("video/")) {
+          videoEl.srcObject = null;
+          videoEl.src = url;
+          videoEl.play().catch(() => {});
+          this.visualizer.setMediaSource(videoEl);
+        } else {
+          imgEl.onload = () => {
+            this.visualizer.setMediaSource(imgEl);
+          };
+          imgEl.src = url;
+        }
+        btnUpload.classList.add("active");
+        btnCamera.classList.remove("active");
+        updateMixUI(80);
+      });
+    }
+
+    if (btnCamera) {
+      btnCamera.addEventListener("click", async () => {
+        try {
+          this.stopCameraStream();
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false,
+          });
+          this.cameraStream = stream;
+          videoEl.src = "";
+          videoEl.srcObject = stream;
+          await videoEl.play();
+          this.visualizer.setMediaSource(videoEl);
+          btnCamera.classList.add("active");
+          if (btnUpload) btnUpload.classList.remove("active");
+          updateMixUI(85);
+        } catch (err) {
+          alert(`Не вдалося увімкнути камеру: ${err.message}`);
+        }
+      });
+    }
+
+    if (btnClear) {
+      btnClear.addEventListener("click", () => {
+        this.stopCameraStream();
+        videoEl.pause();
+        videoEl.src = "";
+        this.visualizer.clearMediaSource();
+        if (btnUpload) btnUpload.classList.remove("active");
+        if (btnCamera) btnCamera.classList.remove("active");
+        updateMixUI(0);
+      });
+    }
+
+    if (rangeMix) {
+      rangeMix.addEventListener("input", (e) => {
+        updateMixUI(Number(e.target.value));
+      });
+    }
+
+    document.querySelectorAll("[data-media-mode]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll("[data-media-mode]").forEach((c) =>
+          c.classList.toggle("active", c === chip)
+        );
+        this.visualizer.mediaBlendMode = Number(chip.dataset.mediaMode) || 0;
+      });
+    });
+  }
+
+  stopCameraStream() {
+    if (this.cameraStream) {
+      this.cameraStream.getTracks().forEach((t) => t.stop());
+      this.cameraStream = null;
+    }
+  }
+
+  highlightSourceButton(source) {
+    document.querySelectorAll(".src-pill").forEach((b) => {
+      const isMatch = b.dataset.source === source;
+      b.classList.toggle("active", isMatch);
+      b.setAttribute("tabindex", isMatch ? "0" : "-1");
+    });
+  }
+
+  highlightModeButtons(mode) {
+    document.querySelectorAll("[data-mode]").forEach((b) => {
+      const isMatch = b.dataset.mode === mode;
+      b.classList.toggle("active", isMatch);
+      b.setAttribute("tabindex", isMatch ? "0" : "-1");
+    });
+  }
+
+  setupXYPad() {
+    const pad = document.getElementById("xyPad");
+    let isDragging = false;
+
+    const updateFromEvent = (e) => {
+      const rect = pad.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const y = Math.max(0, Math.min(1, 1.0 - (e.clientY - rect.top) / rect.height));
+      this.updateXYUI(x, y);
+      this.visualizer.setXY(x, y);
+      this.sync.send({ type: "xy", x, y });
+    };
+
+    pad.addEventListener("pointerdown", (e) => {
+      isDragging = true;
+      pad.setPointerCapture(e.pointerId);
+      updateFromEvent(e);
+    });
+
+    pad.addEventListener("pointermove", (e) => {
+      if (!isDragging) return;
+      updateFromEvent(e);
+    });
+
+    const stopDrag = () => {
+      isDragging = false;
+    };
+    pad.addEventListener("pointerup", stopDrag);
+    pad.addEventListener("pointercancel", stopDrag);
+  }
+
+  updateXYUI(x, y) {
+    const puck = document.getElementById("xyPuck");
+    if (puck) {
+      puck.style.left = `${x * 100}%`;
+      puck.style.top = `${(1 - y) * 100}%`;
+    }
+    const coordsBadge = document.getElementById("xyCoordsBadge");
+    if (coordsBadge) {
+      coordsBadge.textContent = `X: ${Math.round(x * 100)}% · Y: ${Math.round(y * 100)}%`;
+    }
+  }
+
+  setupFXButtons() {
+    const btnStrobe = document.getElementById("fxStrobe");
+    const btnShockwave = document.getElementById("fxShockwave");
+    const btnFreeze = document.getElementById("fxFreeze");
+    const btnColorDrop = document.getElementById("fxColorDrop");
+
+    // Блокуємо виділення тексту та системне меню iOS Safari при утриманні тактильних клавіш
+    document.addEventListener("selectstart", (e) => {
+      if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+      }
+    });
+
+    [btnStrobe, btnShockwave, btnFreeze, btnColorDrop].forEach((btn) => {
+      if (!btn) return;
+      btn.addEventListener("contextmenu", (e) => e.preventDefault());
+      btn.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+    });
+
+    const setStrobe = (active) => {
+      this.visualizer.fx.strobe = active;
+      btnStrobe.classList.toggle("active", active);
+      this.sync.send({ type: "fx", effect: "strobe", active });
+    };
+    btnStrobe.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      try {
+        btnStrobe.setPointerCapture(e.pointerId);
+      } catch {}
+      setStrobe(true);
+    });
+    btnStrobe.addEventListener("pointerup", () => setStrobe(false));
+    btnStrobe.addEventListener("pointerleave", () => setStrobe(false));
+    btnStrobe.addEventListener("pointercancel", () => setStrobe(false));
+    btnStrobe.addEventListener("touchend", () => setStrobe(false));
+    btnStrobe.addEventListener("touchcancel", () => setStrobe(false));
+
+    const setFreeze = (active) => {
+      this.visualizer.fx.freeze = active;
+      btnFreeze.classList.toggle("active", active);
+      this.sync.send({ type: "fx", effect: "freeze", active });
+    };
+    btnFreeze.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      try {
+        btnFreeze.setPointerCapture(e.pointerId);
+      } catch {}
+      setFreeze(true);
+    });
+    btnFreeze.addEventListener("pointerup", () => setFreeze(false));
+    btnFreeze.addEventListener("pointerleave", () => setFreeze(false));
+    btnFreeze.addEventListener("pointercancel", () => setFreeze(false));
+    btnFreeze.addEventListener("touchend", () => setFreeze(false));
+    btnFreeze.addEventListener("touchcancel", () => setFreeze(false));
+
+    btnShockwave.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      this.visualizer.triggerShockwave();
+      this.sync.send({ type: "fx", effect: "shockwave" });
+    });
+
+    btnColorDrop.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      this.visualizer.triggerColorDrop();
+      this.sync.send({
+        type: "fx",
+        effect: "colordrop",
+        colorShift: this.visualizer.colorShift,
+      });
+    });
+  }
+
+  /**
+   * D-Pad / Пульт Smart TV & Проектора (Spatial Navigation за стандартом Roving Tabindex)
+   */
+  setupSpatialNavigation() {
+    const containers = [
+      document.getElementById("projectorDock"),
+      document.getElementById("presetGrid"),
+      document.getElementById("sourceContainer"),
+    ];
+
+    containers.forEach((container) => {
+      if (!container) return;
+
+      container.addEventListener("keydown", (e) => {
+        const dirMap = {
+          ArrowRight: "right",
+          ArrowLeft: "left",
+          ArrowDown: "down",
+          ArrowUp: "up",
+        };
+        const dir = dirMap[e.key];
+        if (!dir) return;
+
+        if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) {
+          return;
+        }
+
+        const innerTarget = e.composedPath()[0];
+        if (
+          innerTarget instanceof Element &&
+          innerTarget.matches(':read-write, select, input[type="range"], [role="slider"]')
+        ) {
+          return;
+        }
+
+        const candidates = Array.from(
+          container.querySelectorAll("button, [tabindex]")
+        ).filter((el) => el.checkVisibility && el.checkVisibility());
+
+        const current = document.activeElement;
+        if (!candidates.includes(current)) return;
+
+        const currRect = current.getBoundingClientRect();
+        const tolerance = 2;
+
+        const validCandidates = candidates
+          .filter((el) => el !== current)
+          .map((el) => ({ el, rect: el.getBoundingClientRect() }))
+          .filter(({ rect }) => {
+            if (dir === "right") return rect.left >= currRect.right - tolerance;
+            if (dir === "left") return rect.right <= currRect.left + tolerance;
+            if (dir === "down") return rect.top >= currRect.bottom - tolerance;
+            if (dir === "up") return rect.bottom <= currRect.top + tolerance;
+            return false;
+          });
+
+        if (validCandidates.length === 0) {
+          return;
+        }
+
+        const isHorizontal = dir === "left" || dir === "right";
+        const currCenterPerp = isHorizontal
+          ? (currRect.top + currRect.bottom) / 2
+          : (currRect.left + currRect.right) / 2;
+
+        const scored = validCandidates.map(({ el, rect }) => {
+          const gap =
+            dir === "right"
+              ? Math.max(0, rect.left - currRect.right)
+              : dir === "left"
+              ? Math.max(0, currRect.left - rect.right)
+              : dir === "down"
+              ? Math.max(0, rect.top - currRect.bottom)
+              : Math.max(0, currRect.top - rect.bottom);
+
+          const overlapsPerp = isHorizontal
+            ? rect.bottom > currRect.top && rect.top < currRect.bottom
+            : rect.right > currRect.left && rect.left < currRect.right;
+
+          const candCenterPerp = isHorizontal
+            ? (rect.top + currRect.bottom) / 2
+            : (rect.left + rect.right) / 2;
+          const perpOffset = Math.abs(candCenterPerp - currCenterPerp);
+
+          return { el, gap, overlapsPerp, perpOffset };
+        });
+
+        const aligned = scored.filter((c) => c.overlapsPerp);
+        let winner;
+        if (aligned.length > 0) {
+          aligned.sort((a, b) => a.gap - b.gap || a.perpOffset - b.perpOffset);
+          winner = aligned[0].el;
+        } else {
+          const w = 2.5;
+          scored.sort(
+            (a, b) =>
+              a.gap + w * a.perpOffset - (b.gap + w * b.perpOffset)
+          );
+          winner = scored[0].el;
+        }
+
+        if (winner) {
+          e.preventDefault();
+          candidates.forEach((c) =>
+            c.setAttribute("tabindex", c === winner ? "0" : "-1")
+          );
+          winner.focus();
+          winner.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+      });
+    });
+  }
+
+  setupAutoHideHud() {
+    const triggerActivity = () => {
+      if (this.currentView === "projector") {
+        this.resetHudTimer();
+      }
+    };
+    window.addEventListener("pointermove", triggerActivity);
+    window.addEventListener("pointerdown", triggerActivity);
+    window.addEventListener("keydown", triggerActivity);
+  }
+
+  resetHudTimer() {
+    const dock = document.getElementById("projectorDock");
+    if (!dock) return;
+    dock.classList.remove("hud-hidden");
+    clearTimeout(this.hudTimeout);
+    this.hudTimeout = setTimeout(() => {
+      if (this.currentView === "projector") {
+        dock.classList.add("hud-hidden");
+      }
+    }, 4000);
+  }
+
+  /**
+   * Гарячі клавіші для професійного VJ-контролю на Десктопі / Ноутбуку
+   */
+  setupDesktopShortcuts() {
+    const sceneKeyMap = {
+      "1": "lasers",
+      "2": "blobtrack",
+      "3": "pointcloud",
+      "4": "reaction",
+      "5": "synthwave",
+      "6": "ferrofluid",
+      "7": "tunnel",
+      "8": "liquid",
+      "9": "fractal",
+    };
+
+    const tabKeyMap = {
+      q: "tabScenes",
+      e: "tabFilmoraFx",
+      r: "tabTdNodes",
+      t: "tabMediaTop",
+      a: "tabAll",
+    };
+
+    const btnStrobe = document.getElementById("fxStrobe");
+    const btnShockwave = document.getElementById("fxShockwave");
+    const btnFreeze = document.getElementById("fxFreeze");
+    const btnColorDrop = document.getElementById("fxColorDrop");
+    const shortcutsModal = document.getElementById("shortcutsModal");
+
+    const setStrobe = (active) => {
+      this.visualizer.fx.strobe = active;
+      if (btnStrobe) btnStrobe.classList.toggle("active", active);
+      this.sync.send({ type: "fx", effect: "strobe", active });
+    };
+
+    window.addEventListener("keydown", (e) => {
+      // Пропускаємо, якщо користувач вводить текст у поле чи форму
+      const target = e.target;
+      if (
+        target instanceof Element &&
+        (target.matches("input, textarea, select, [contenteditable='true']") ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+
+      // Escape закриває активні модалки
+      if (e.key === "Escape") {
+        if (shortcutsModal && !shortcutsModal.hidden) {
+          shortcutsModal.hidden = true;
+          return;
+        }
+        const qrModal = document.getElementById("qrModal");
+        if (qrModal && !qrModal.hidden) {
+          qrModal.hidden = true;
+          return;
+        }
+        const proModal = document.getElementById("proModal");
+        if (proModal && !proModal.hidden) {
+          proModal.hidden = true;
+          return;
+        }
+      }
+
+      // Довідка гарячих клавіш: ? або H
+      if (e.key === "?" || e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        if (shortcutsModal) {
+          shortcutsModal.hidden = !shortcutsModal.hidden;
+        }
+        return;
+      }
+
+      // Сцени 1-9
+      if (sceneKeyMap[e.key]) {
+        e.preventDefault();
+        const mode = sceneKeyMap[e.key];
+        if (typeof this.selectMode === "function") {
+          this.selectMode(mode);
+        } else {
+          this.visualizer.setMode(mode);
+          this.highlightModeButtons(mode);
+          this.sync.send({ type: "mode", mode });
+        }
+        const pad = document.querySelector(`.vj-pad[data-mode="${mode}"]`);
+        if (pad) {
+          pad.classList.add("active");
+          pad.focus();
+        }
+        return;
+      }
+
+      // TRG-01: STROBE (Space)
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (!e.repeat) {
+          setStrobe(true);
+        }
+        return;
+      }
+
+      // TRG-02: SHOCKWAVE (W)
+      if (e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        this.visualizer.triggerShockwave();
+        if (btnShockwave) {
+          btnShockwave.classList.add("active");
+          setTimeout(() => btnShockwave.classList.remove("active"), 140);
+        }
+        this.sync.send({ type: "fx", effect: "shockwave" });
+        return;
+      }
+
+      // TRG-03: FREEZE (F)
+      if (e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        const active = !this.visualizer.fx.freeze;
+        this.visualizer.fx.freeze = active;
+        if (btnFreeze) btnFreeze.classList.toggle("active", active);
+        this.sync.send({ type: "fx", effect: "freeze", active });
+        return;
+      }
+
+      // TRG-04: PALETTE DROP (C)
+      if (e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        this.visualizer.triggerColorDrop();
+        if (btnColorDrop) {
+          btnColorDrop.classList.add("active");
+          setTimeout(() => btnColorDrop.classList.remove("active"), 140);
+        }
+        this.sync.send({
+          type: "fx",
+          effect: "colordrop",
+          colorShift: this.visualizer.colorShift,
+        });
+        return;
+      }
+
+      // Перемикання вкладок студії: Q, E, R, T, A
+      const k = e.key.toLowerCase();
+      if (tabKeyMap[k]) {
+        e.preventDefault();
+        const tabTarget = tabKeyMap[k];
+        const tabBtn = document.querySelector(`.studio-tab[data-tab="${tabTarget}"]`);
+        if (tabBtn) tabBtn.click();
+        return;
+      }
+
+      // Перемикання монітора звуку: M
+      if (k === "m") {
+        e.preventDefault();
+        const chk = document.getElementById("chkSynthAudio");
+        if (chk) {
+          chk.checked = !chk.checked;
+          chk.dispatchEvent(new Event("change"));
+        }
+        return;
+      }
+
+      // Перемикання Live Program Monitor прев'ю на пульті: P
+      if (k === "p") {
+        e.preventDefault();
+        this.toggleProgramMonitor();
+        return;
+      }
+
+      // Перемикання режимів екрана: V
+      if (k === "v") {
+        e.preventDefault();
+        const views = ["split", "projector", "remote"];
+        const nextIdx = (views.indexOf(this.currentView) + 1) % views.length;
+        this.setView(views[nextIdx]);
+        return;
+      }
+
+      // Стрілки клавіатури для точного зміщення XY Puck
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        const step = 0.04;
+        let curX = this.visualizer.xy ? this.visualizer.xy.x : 0.5;
+        let curY = this.visualizer.xy ? this.visualizer.xy.y : 0.5;
+        if (e.key === "ArrowLeft") curX = Math.max(0, curX - step);
+        if (e.key === "ArrowRight") curX = Math.min(1, curX + step);
+        if (e.key === "ArrowDown") curY = Math.max(0, curY - step);
+        if (e.key === "ArrowUp") curY = Math.min(1, curY + step);
+        e.preventDefault();
+        this.updateXYUI(curX, curY);
+        this.visualizer.setXY(curX, curY);
+        this.sync.send({ type: "xy", x: curX, y: curY });
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "Space") {
+        setStrobe(false);
+      }
+    });
+
+    window.addEventListener("blur", () => {
+      setStrobe(false);
+    });
+  }
+
+  /**
+   * Розширені можливості маніпуляції мишею на десктопі
+   */
+  setupDesktopMouseInteractions() {
+    const xyPad = document.getElementById("xyPad");
+    if (xyPad) {
+      // Подвійний клік повертає puck у центр (50%, 50%)
+      xyPad.addEventListener("dblclick", () => {
+        this.updateXYUI(0.5, 0.5);
+        this.visualizer.setXY(0.5, 0.5);
+        this.sync.send({ type: "xy", x: 0.5, y: 0.5 });
+      });
+    }
+
+    // Тонке регулювання коліщатком миші над фейдерами
+    document.querySelectorAll('input[type="range"]').forEach((slider) => {
+      slider.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          const step = Number(slider.step) || 2;
+          const delta = e.deltaY < 0 ? step : -step;
+          const min = Number(slider.min) || 0;
+          const max = Number(slider.max) || 100;
+          const current = Number(slider.value) || 0;
+          const next = Math.max(min, Math.min(max, current + delta));
+          if (next !== current) {
+            slider.value = next;
+            slider.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        },
+        { passive: false }
+      );
+
+      // Подвійний клік скидає слайдер на значення за замовчуванням
+      slider.addEventListener("dblclick", () => {
+        const defaultVal =
+          slider.id === "rangeKeystoneScale"
+            ? 100
+            : Number(slider.min) || 0;
+        slider.value = defaultVal;
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    });
+
+    // Відкриття та закриття модалки гарячих клавіш
+    const btnShortcuts = document.getElementById("btnShortcuts");
+    const modal = document.getElementById("shortcutsModal");
+    const btnClose = document.getElementById("btnCloseShortcuts");
+    if (btnShortcuts && modal) {
+      btnShortcuts.addEventListener("click", () => {
+        modal.hidden = false;
+      });
+    }
+    if (btnClose && modal) {
+      btnClose.addEventListener("click", () => {
+        modal.hidden = true;
+      });
+    }
+  }
+
+  renderQrModal() {
+    const rawHost = this.sync.serverHost || (location.host || "192.168.0.40:3456");
+    const ip = rawHost.split(":")[0];
+    const httpsHost = `${ip}:3457`;
+    const httpHost = `${ip}:3456`;
+
+    // Для пульта смартфона формуємо HTTPS посилання (порт 3457) для роботи мікрофона в Safari/Chrome
+    const remoteUrl = `https://${httpsHost}/?view=remote&room=${encodeURIComponent(this.sync.roomId)}`;
+    const projectorUrl = `http://${httpHost}/?view=projector&room=${encodeURIComponent(this.sync.roomId)}`;
+
+    const remoteUrlEl = document.getElementById("remoteUrlText");
+    if (remoteUrlEl) {
+      remoteUrlEl.innerHTML = `
+        <div style="margin-bottom:6px;"><strong>📱 Пульт (iPhone/Android з мікрофоном):</strong></div>
+        <div style="word-break:break-all;color:var(--neon);font-family:monospace;font-size:12px;margin-bottom:8px;">${remoteUrl}</div>
+        <div style="opacity:0.75;font-size:11px;">📽️ Екран (Smart TV / Проектор): <code>${projectorUrl}</code></div>
+      `;
+    }
+    const roomInput = document.getElementById("roomInput");
+    if (roomInput) roomInput.value = this.sync.roomId;
+    const qrBox = document.getElementById("qrCodeBox");
+    const encoded = encodeURIComponent(remoteUrl);
+    if (qrBox) {
+      qrBox.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR Code для підключення смартфона" />`;
+    }
+  }
+
+  loadSavedCustomEffects() {
+    const studioBtn = document.getElementById("btnOpenStudio");
+    if (studioBtn) {
+      studioBtn.href = `studio.html?room=${encodeURIComponent(this.sync.roomId)}`;
+    }
+    try {
+      const raw = localStorage.getItem("aura_vj_custom_effects");
+      const list = raw ? JSON.parse(raw) : [];
+      list.forEach((eff) => this.installCustomEffect(eff, false, false));
+    } catch {
+      // ignore
+    }
+  }
+
+  installCustomEffect(effect, activateNow = true, persist = true) {
+    if (!effect || !effect.id) return;
+    this.visualizer.registerCustomEffect(effect);
+
+    if (persist) {
+      try {
+        const raw = localStorage.getItem("aura_vj_custom_effects");
+        const list = raw ? JSON.parse(raw) : [];
+        const existingIdx = list.findIndex((item) => item.id === effect.id);
+        if (existingIdx !== -1) list[existingIdx] = effect;
+        else list.push(effect);
+        localStorage.setItem("aura_vj_custom_effects", JSON.stringify(list));
+      } catch {
+        // ignore
+      }
+    }
+
+    // 1. Додаємо або оновлюємо кнопку на пульті смартфона (#presetGrid)
+    const grid = document.getElementById("presetGrid");
+    if (grid) {
+      let pad = grid.querySelector(`[data-mode="${effect.id}"]`);
+      if (!pad) {
+        pad = document.createElement("button");
+        pad.className = "vj-pad custom-vj-pad";
+        pad.dataset.mode = effect.id;
+        pad.setAttribute("tabindex", "-1");
+        pad.addEventListener("click", () => {
+          this.visualizer.setMode(effect.id);
+          if (effect.postFx || effect.chopRouting) {
+            this.applyPatchState(effect);
+          }
+          this.highlightModeButtons(effect.id);
+          this.sync.send({ type: "installCustomEffect", effect });
+        });
+        grid.appendChild(pad);
+      }
+      pad.innerHTML = `
+        <div class="pad-top-row">
+          <svg class="ico" viewBox="0 0 24 24"><polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9 12 2"/></svg>
+          <span class="pad-code">${effect.emoji || "USR-FX"}</span>
+        </div>
+        <span class="pad-name">${effect.name || "Custom FX"}</span>
+        <span class="pad-sub">${effect.sub || "FX Studio"}</span>
+      `;
+    }
+
+    // 2. Додаємо або оновлюємо кнопку в док-панелі проектора (#projectorDock)
+    const dock = document.getElementById("projectorDock");
+    const qrBtn = document.getElementById("btnQrModal");
+    if (dock) {
+      let dockBtn = dock.querySelector(`[data-mode="${effect.id}"]`);
+      if (!dockBtn) {
+        dockBtn = document.createElement("button");
+        dockBtn.className = "dock-item";
+        dockBtn.dataset.mode = effect.id;
+        dockBtn.setAttribute("tabindex", "-1");
+        dockBtn.addEventListener("click", () => {
+          this.visualizer.setMode(effect.id);
+          if (effect.postFx || effect.chopRouting) {
+            this.applyPatchState(effect);
+          }
+          this.highlightModeButtons(effect.id);
+          this.sync.send({ type: "installCustomEffect", effect });
+        });
+        if (qrBtn) dock.insertBefore(dockBtn, qrBtn);
+        else dock.appendChild(dockBtn);
+      }
+      dockBtn.innerHTML = `
+        <svg class="ico" viewBox="0 0 24 24"><polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9 12 2"/></svg>
+        <span class="dock-label">${effect.name || "Custom FX"}</span>
+      `;
+    }
+
+    if (activateNow) {
+      this.visualizer.setMode(effect.id);
+      this.applyPatchState(effect);
+      this.highlightModeButtons(effect.id);
+    }
+  }
+
+  handleSyncMessage(msg) {
+    if (!msg || !msg.type) return;
+    if (msg.type === "syncStatus") {
+      const badge = document.getElementById("btnRoomBadge");
+      const studioBtn = document.getElementById("btnOpenStudio");
+      if (msg.roomId) {
+        this.visualizer.roomId = msg.roomId;
+      }
+      if (badge) {
+        badge.classList.toggle("online", !!msg.connected);
+        badge.classList.toggle("p2p-active", !!msg.p2p);
+      }
+      if (studioBtn && msg.roomId) {
+        studioBtn.href = `studio.html?room=${encodeURIComponent(msg.roomId)}`;
+      }
+      const isStillLinked =
+        this.lastPeerHeartbeat &&
+        performance.now() - this.lastPeerHeartbeat < 16000;
+      this.updatePeerStatusUI(!!isStillLinked);
+      return;
+    }
+
+    // Будь-який пакет від іншого учасника кімнати підтверджує активний зв'язок
+    this.lastPeerHeartbeat = performance.now();
+    this.updatePeerStatusUI(true, msg.role);
+
+    if (msg.type === "peerHeartbeat") {
+      // Відповідаємо синхронізацією стану підключеному пристрою
+      if (msg.isPing && !msg.isPong) {
+        this.sync.send({
+          type: "stateSync",
+          isPong: true,
+          mode: this.visualizer.modes[this.visualizer.modeIndex],
+          isPro: this.isPro,
+          xy: { ...this.visualizer.xy },
+          colorShift: this.visualizer.colorShift,
+          postFx: { ...this.visualizer.postFx },
+          chopRouting: { ...this.visualizer.chopRouting },
+        });
+      }
+    } else if (msg.type === "stateSync") {
+      if (msg.mode) {
+        this.visualizer.setMode(msg.mode);
+        this.highlightModeButtons(msg.mode);
+      }
+      if (typeof msg.isPro === "boolean") {
+        this.setProStatus(msg.isPro, false);
+      }
+      if (msg.xy && typeof msg.xy.x === "number") {
+        this.visualizer.setXY(msg.xy.x, msg.xy.y);
+        this.updateXYUI(msg.xy.x, msg.xy.y);
+      }
+      if (typeof msg.colorShift === "number") {
+        this.visualizer.colorShift = msg.colorShift;
+      }
+      if (msg.postFx || msg.chopRouting) {
+        this.applyPatchState(msg);
+      }
+    } else if (msg.type === "proStatus") {
+      this.setProStatus(!!msg.isPro, false);
+    } else if (msg.type === "venueKeystone") {
+      if (msg.venueOverlay) this.visualizer.venueOverlay = msg.venueOverlay;
+      if (msg.keystone) this.visualizer.keystone = msg.keystone;
+    } else if (msg.type === "installCustomEffect" && msg.effect) {
+      this.installCustomEffect(msg.effect, true, true);
+    } else if (msg.type === "mode") {
+      this.visualizer.setMode(msg.mode);
+      this.highlightModeButtons(msg.mode);
+    } else if (msg.type === "xy") {
+      this.visualizer.setXY(msg.x, msg.y);
+      this.updateXYUI(msg.x, msg.y);
+    } else if (msg.type === "postFx") {
+      this.applyPatchState(msg);
+    } else if (msg.type === "fx") {
+      if (msg.effect === "strobe") this.visualizer.fx.strobe = !!msg.active;
+      if (msg.effect === "freeze") this.visualizer.fx.freeze = !!msg.active;
+      if (msg.effect === "shockwave") this.visualizer.triggerShockwave();
+      if (msg.effect === "colordrop") {
+        this.visualizer.colorShift = msg.colorShift ?? (this.visualizer.colorShift + 0.27) % 1;
+        this.visualizer.triggerShockwave();
+      }
+    } else if (msg.type === "dspTelemetry") {
+      // Приймаємо аудіо-телеметрію з пульта/ноутбука на Проектор та Split
+      // Ігноруємо тільки якщо на проекторі вручну запущено локальний мікрофон або аудіофайл
+      const hasLocalMicrophoneOrFile =
+        this.audioStarted &&
+        (this.dsp.activeSource === "mic" || this.dsp.activeSource === "file");
+
+      if (this.currentView !== "remote" && !hasLocalMicrophoneOrFile) {
+        this.audioStarted = false;
+        this.dsp.ingestRemoteTelemetry(msg.state);
+      }
+    }
+  }
+
+  setupPeerSyncHeartbeat() {
+    this.lastPeerHeartbeat = null;
+    // Миттєвий анонс присутності при старті
+    setTimeout(() => {
+      this.sync.send({
+        type: "peerHeartbeat",
+        role: this.currentView,
+        isPing: true,
+      });
+    }, 250);
+
+    setInterval(() => {
+      this.sync.send({
+        type: "peerHeartbeat",
+        role: this.currentView,
+        isPing: true,
+      });
+      if (
+        this.lastPeerHeartbeat &&
+        performance.now() - this.lastPeerHeartbeat > 16000
+      ) {
+        this.updatePeerStatusUI(false);
+      }
+    }, 2500);
+  }
+
+  updatePeerStatusUI(isLinked, role = null) {
+    const badge = document.getElementById("btnRoomBadge");
+    const text = document.getElementById("roomCodeText");
+    if (!badge || !text) return;
+
+    const isConnected = !!this.sync.connected;
+
+    badge.classList.toggle("online", isConnected);
+
+    if (isLinked) {
+      badge.classList.add("peer-linked");
+      badge.classList.add("p2p-active");
+      badge.title = `Кімната ${this.sync.roomId}: Синхронізовано з ${role === "remote" ? "Пультом" : "Проектором"} через Wi-Fi (${this.sync.serverHost})!`;
+      text.textContent = `${this.sync.roomId} ⚡ LAN`;
+    } else {
+      badge.classList.remove("peer-linked");
+      badge.classList.remove("p2p-active");
+      if (isConnected) {
+        badge.title = `Сервер підключено (${this.sync.serverHost}). Очікуємо підключення іншого пристрою...`;
+        text.textContent = `${this.sync.roomId} 🟡 LAN`;
+      } else {
+        badge.title = `Підключення до локального сервера ${this.sync.serverHost}...`;
+        text.textContent = `${this.sync.roomId} ⏳ LAN`;
+      }
+    }
+  }
+
+  loop(now) {
+    requestAnimationFrame((t) => this.loop(t));
+
+    let dspState;
+    const hasLiveRemote =
+      this.dsp.activeSource === "remote" &&
+      this.dsp.lastRemoteTelemetryTime &&
+      now - this.dsp.lastRemoteTelemetryTime < 3000;
+
+    if (this.audioStarted || hasLiveRemote) {
+      dspState = this.dsp.update(now);
+    } else {
+      // Демо-біт синхронізовано за глобальним системним часом Date.now() між усіма пристроями
+      const wallMs = Date.now();
+      const t = (wallMs % 3600000) / 1000;
+      const beatPhase = (wallMs % 468.75) / 468.75;
+      const kick = Math.pow(Math.max(0, 1.0 - beatPhase * 3.2), 2.0);
+      dspState = {
+        subBass: 0.25 + kick * 0.72,
+        bass: 0.3 + Math.sin(t * 3.0) * 0.25 + kick * 0.3,
+        mid: 0.35 + Math.sin(t * 5.2) * 0.28,
+        high: 0.25 + Math.abs(Math.sin(t * 11.0)) * 0.45,
+        energy: 0.5,
+        isBeat: beatPhase < 0.08,
+        beatIntensity: kick,
+        beatCount: Math.floor((wallMs % 36000000) / 468.75),
+        bpm: 128,
+        beatPhase,
+      };
+    }
+
+    // Якщо це Пульт (або Split з активним власним джерелом звуку) — транслюємо телеметрію + фазу часу на Проектор
+    const shouldBroadcastTelemetry =
+      this.currentView === "remote" ||
+      (this.currentView === "split" &&
+        this.audioStarted &&
+        this.dsp.activeSource !== "remote");
+
+    if (shouldBroadcastTelemetry) {
+      this.sync.send({
+        type: "dspTelemetry",
+        state: [
+          Math.round(dspState.subBass * 100) / 100,
+          Math.round(dspState.bass * 100) / 100,
+          Math.round(dspState.mid * 100) / 100,
+          Math.round(dspState.high * 100) / 100,
+          Math.round(dspState.beatIntensity * 100) / 100,
+          dspState.bpm || 128,
+          Math.round(dspState.beatPhase * 100) / 100,
+          dspState.isBeat ? 1 : 0,
+          dspState.beatCount || 0,
+          Math.round(this.visualizer.accumulatedTime * 100) / 100,
+        ],
+      });
+    } else if (hasLiveRemote && typeof dspState.remoteTime === "number") {
+      // Підтягуємо внутрішній час шейдерів проектора до часу пульта для 100% фазової синхронізації
+      const timeDiff = dspState.remoteTime - this.visualizer.accumulatedTime;
+      if (Math.abs(timeDiff) > 1.2) {
+        this.visualizer.accumulatedTime = dspState.remoteTime;
+      } else if (Math.abs(timeDiff) > 0.05) {
+        this.visualizer.accumulatedTime += timeDiff * 0.22;
+      }
+    }
+
+    this.visualizer.render(dspState, now);
+
+    // Оновлюємо пульсацію активного мікрофона на пульті
+    const micDot = document.getElementById("micLiveDot");
+    if (micDot) {
+      micDot.classList.toggle(
+        "live",
+        this.audioStarted &&
+          (this.dsp.activeSource === "mic" || this.dsp.activeSource === "screen")
+      );
+    }
+
+    // Оновлюємо індикатори Audio-CHOP матриці
+    for (const [key, val] of Object.entries(this.visualizer.effectivePostFx)) {
+      const bar = document.getElementById(`chopBar_${key}`);
+      if (bar) {
+        bar.style.width = `${Math.round(val * 100)}%`;
+      }
+    }
+
+    const beatLed = document.getElementById("beatLed");
+    if (beatLed) {
+      beatLed.classList.toggle("beat-hit", dspState.beatIntensity > 0.55);
+    }
+    const bpmEl = document.getElementById("bpmDisplay");
+    if (bpmEl) {
+      bpmEl.textContent = `${dspState.bpm || 128} BPM`;
+    }
+
+    document.getElementById("meterSub").style.height = `${Math.max(10, dspState.subBass * 100)}%`;
+    document.getElementById("meterBass").style.height = `${Math.max(10, dspState.bass * 100)}%`;
+    document.getElementById("meterMid").style.height = `${Math.max(10, dspState.mid * 100)}%`;
+    document.getElementById("meterHigh").style.height = `${Math.max(10, dspState.high * 100)}%`;
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  window.auraApp = new AuraVJApp();
+});

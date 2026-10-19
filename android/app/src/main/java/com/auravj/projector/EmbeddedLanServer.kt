@@ -8,22 +8,27 @@ import java.io.OutputStream
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.charset.StandardCharsets
+import java.security.KeyStore
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import javax.net.ssl.KeyManagerFactory
+import javax.net.ssl.SSLContext
 import kotlin.concurrent.thread
 
 /**
- * Вбудований локальний HTTP + WebSocket сервер для Android-проектора (Zero-Dependency).
+ * Вбудований автономний локальний HTTP + HTTPS + WebSocket сервер для Android-проектора (Zero-Dependency).
  * Дозволяє смартфону (iPhone / Android) підключатися безпосередньо до проектора
  * у спільній Wi-Fi мережі роутера БЕЗ участі ноутбука чи інтернету!
  */
 class EmbeddedLanServer(
     private val context: Context,
-    private val port: Int = 3456
+    private val port: Int = 3456,
+    private val httpsPort: Int = 3457
 ) {
     private var serverSocket: ServerSocket? = null
+    private var sslServerSocket: ServerSocket? = null
     @Volatile private var isRunning = false
     private val threadPool = Executors.newCachedThreadPool()
     private val wsClients = Collections.newSetFromMap(ConcurrentHashMap<Socket, Boolean>())
@@ -32,7 +37,8 @@ class EmbeddedLanServer(
         if (isRunning) return
         isRunning = true
 
-        thread(name = "AuraLanServer") {
+        // 1. Звичайний HTTP сервер (порт 3456) для Smart TV / Проектора
+        thread(name = "AuraLanHttpServer") {
             try {
                 val ss = ServerSocket(port)
                 serverSocket = ss
@@ -48,13 +54,45 @@ class EmbeddedLanServer(
                 e.printStackTrace()
             }
         }
+
+        // 2. Безпечний HTTPS сервер (порт 3457) для прямого підключення iPhone з мікрофоном
+        thread(name = "AuraLanHttpsServer") {
+            try {
+                val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
+                val ks = KeyStore.getInstance("PKCS12")
+                val p12Stream = try {
+                    context.assets.open("keystore.p12")
+                } catch (e: Exception) {
+                    null
+                }
+
+                if (p12Stream != null) {
+                    p12Stream.use { ks.load(it, "auravj".toCharArray()) }
+                    kmf.init(ks, "auravj".toCharArray())
+                    val sslContext = SSLContext.getInstance("TLS")
+                    sslContext.init(kmf.keyManagers, null, null)
+                    val sslSs = sslContext.serverSocketFactory.createServerSocket(httpsPort)
+                    sslServerSocket = sslSs
+
+                    while (isRunning && !sslSs.isClosed) {
+                        try {
+                            val client = sslSs.accept()
+                            threadPool.execute { handleConnection(client) }
+                        } catch (e: Exception) {
+                            if (!isRunning) break
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     fun stop() {
         isRunning = false
-        try {
-            serverSocket?.close()
-        } catch (e: Exception) {}
+        try { serverSocket?.close() } catch (e: Exception) {}
+        try { sslServerSocket?.close() } catch (e: Exception) {}
         for (client in wsClients) {
             try { client.close() } catch (e: Exception) {}
         }

@@ -1,0 +1,19 @@
+{
+  "name": "AURA VJ PRO — Spatial Projection & FX Studio",
+  "short_name": "AURA VJ PRO",
+  "description": "60 FPS Laser Projection Visualizer, TouchDesigner Node Studio & iPhone Smart Remote",
+  "start_url": "./index.html?view=remote",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#050507",
+  "theme_color": "#09090b",
+  "categories": ["music", "entertainment", "photo", "utilities"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%2307070a'/%3E%3Ccircle cx='256' cy='256' r='180' fill='none' stroke='%2300f5d4' stroke-width='18' stroke-opacity='0.35'/%3E%3Cpath d='M256 76 L96 416 M256 76 L416 416 M256 76 L256 436 M136 330 L376 330' stroke='%23ff5722' stroke-width='24' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='76' r='26' fill='%23ffffff'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

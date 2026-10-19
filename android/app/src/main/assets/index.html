@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#09090b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AURA VJ PRO" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link rel="manifest" href="manifest.json" />
+    <title>AURA VJ PRO — Spatial Projection & FX Studio</title>
+    <link rel="stylesheet" href="style.css?v=2.6.0" />
+  </head>
+  <body data-view="split">
+    <!-- ВЕРХНЯ ПАНЕЛЬ СТАТУСУ (PRO STUDIO TOP BAR) -->
+    <header class="top-bar" id="topBar">
+      <div class="brand-status">
+        <span class="pulse-dot" id="beatLed"></span>
+        <span class="brand-title">AURA <strong>VJ</strong></span>
+        <button
+          class="pro-status-pill"
+          id="btnProBadge"
+          title="Керування ліцензією AURA VJ PRO та комерційними функціями"
+        >
+          <span id="proBadgeText">FREE</span>
+        </button>
+        <span class="bpm-pill" id="bpmDisplay">128 BPM</span>
+        <button
+          class="room-pill"
+          id="btnRoomBadge"
+          title="З'єднати iPhone та Проектор за QR/кодом кімнати"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+          </svg>
+          <span id="roomCodeText">----</span>
+        </button>
+        <button
+          class="room-pill rec-pill"
+          id="btnRecordVideo"
+          title="Записати 60 FPS відео зі звуком для TikTok / Instagram Reels"
+        >
+          <span class="rec-dot"></span>
+          <span id="recBtnText">REC</span>
+        </button>
+        <a
+          href="studio.html"
+          class="room-pill studio-link-pill"
+          id="btnOpenStudio"
+          title="Відкрити окремий конструктор ефектів TouchDesigner & Filmora"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <circle cx="6" cy="6" r="2.5" />
+            <circle cx="18" cy="6" r="2.5" />
+            <circle cx="12" cy="18" r="2.5" />
+            <path d="M8.5 6h7M7.2 8.2l3.6 7.6M16.8 8.2l-3.6 7.6" />
+          </svg>
+          <span>FX LAB</span>
+        </a>
+        <button
+          class="room-pill shortcuts-btn"
+          id="btnShortcuts"
+          title="Гарячі клавіші для десктопу (Клавіша ? або H)"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <line x1="6" y1="8" x2="6" y2="8" />
+            <line x1="10" y1="8" x2="10" y2="8" />
+            <line x1="14" y1="8" x2="14" y2="8" />
+            <line x1="18" y1="8" x2="18" y2="8" />
+            <line x1="6" y1="12" x2="6" y2="12" />
+            <line x1="18" y1="12" x2="18" y2="12" />
+            <line x1="8" y1="16" x2="16" y2="16" />
+          </svg>
+          <span>KEYS</span>
+        </button>
+        <button
+          class="room-pill monitor-btn active"
+          id="btnToggleMonitor"
+          title="Сховати/показати Live Program Monitor на десктопі (Клавіша P)"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+          <span id="monitorBtnText">MONITOR</span>
+        </button>
+      </div>
+
+      <div class="view-switcher" role="tablist" aria-label="Режим екрана">
+        <button
+          class="view-btn active"
+          data-target-view="split"
+          title="Екран проектора + Пульт на одному екрані"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+          </svg>
+          <span>Split</span>
+        </button>
+        <button
+          class="view-btn"
+          data-target-view="projector"
+          title="Повний екран для Проектора та Smart TV"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <rect x="2" y="4" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="18" x2="12" y2="21" />
+          </svg>
+          <span>Проектор</span>
+        </button>
+        <button
+          class="view-btn"
+          data-target-view="remote"
+          title="Повноекранний VJ-пульт для смартфона"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <line x1="4" y1="21" x2="4" y2="14" />
+            <line x1="4" y1="10" x2="4" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12" y2="3" />
+            <line x1="20" y1="21" x2="20" y2="16" />
+            <line x1="20" y1="12" x2="20" y2="3" />
+            <line x1="1" y1="14" x2="7" y2="14" />
+            <line x1="9" y1="8" x2="15" y2="8" />
+            <line x1="17" y1="16" x2="23" y2="16" />
+          </svg>
+          <span>Пульт</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- СЕКЦІЯ 1: ЕКРАН ПРОЕКТОРА / SMART TV (WebGL Shader Canvas + TD CV Overlay + Spatial Glass Dock) -->
+    <section class="projector-stage" id="projectorStage">
+      <canvas id="shaderCanvas"></canvas>
+      <canvas id="tdOverlayCanvas" class="td-overlay-canvas"></canvas>
+
+      <!-- Приховані елементи для Відео / Камери / Фото текстури (Media TOP) -->
+      <video id="customVideoEl" playsinline muted loop hidden></video>
+      <img id="customImageEl" alt="" hidden />
+
+      <!-- Живий міні-індикатор 4 частотних смуг DSP (Sub-Bass, Bass, Mid, High) -->
+      <div class="dsp-telemetry-hud" id="dspHud">
+        <div class="band-meter">
+          <div class="band-fill sub" id="meterSub"></div>
+          <span>SUB</span>
+        </div>
+        <div class="band-meter">
+          <div class="band-fill bass" id="meterBass"></div>
+          <span>BASS</span>
+        </div>
+        <div class="band-meter">
+          <div class="band-fill mid" id="meterMid"></div>
+          <span>MID</span>
+        </div>
+        <div class="band-meter">
+          <div class="band-fill high" id="meterHigh"></div>
+          <span>HIGH</span>
+        </div>
+      </div>
+
+      <!-- Spatial Glass Dock (автоматично ховається в режимі Проектора) -->
+      <nav
+        class="projector-dock"
+        id="projectorDock"
+        aria-label="Панель керування проектором (підтримує пульт Smart TV)"
+      >
+        <button class="dock-item active" data-mode="lasers" tabindex="0">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <path d="M12 2L2 22M12 2l10 20M12 2v20M4.5 17h15" />
+          </svg>
+          <span class="dock-label">Galvo</span>
+        </button>
+        <button class="dock-item" data-mode="blobtrack" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span class="dock-label">Blob CV</span>
+        </button>
+        <button class="dock-item" data-mode="pointcloud" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <circle cx="6" cy="6" r="1.5" />
+            <circle cx="18" cy="7" r="1.5" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="7" cy="18" r="1.5" />
+            <circle cx="17" cy="17" r="1.5" />
+            <path d="M6 6l6 6 6-5M7 18l5-6 5 5" />
+          </svg>
+          <span class="dock-label">Plexus</span>
+        </button>
+        <button class="dock-item" data-mode="reaction" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <path d="M2 12c3-6 6-6 9 0s6 6 11 0" />
+            <path d="M2 17c3-6 6-6 9 0s6 6 11 0" />
+            <path d="M2 7c3-6 6-6 9 0s6 6 11 0" />
+          </svg>
+          <span class="dock-label">Reaction</span>
+        </button>
+        <button class="dock-item" data-mode="synthwave" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <polygon points="12 3 2 20 22 20 12 3" />
+            <line x1="2" y1="15" x2="22" y2="15" />
+          </svg>
+          <span class="dock-label">Terrain</span>
+        </button>
+        <button class="dock-item" data-mode="ferrofluid" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="6" />
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
+          </svg>
+          <span class="dock-label">Ferro</span>
+        </button>
+        <button class="dock-item" data-mode="tunnel" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2" />
+            <polygon points="12 7 16.5 9.5 16.5 14.5 12 17 7.5 14.5 7.5 9.5 12 7" />
+          </svg>
+          <span class="dock-label">Tunnel</span>
+        </button>
+        <button class="dock-item" data-mode="liquid" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+          </svg>
+          <span class="dock-label">Fluid</span>
+        </button>
+        <button class="dock-item" data-mode="fractal" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <rect x="6" y="6" width="12" height="12" transform="rotate(45 12 12)" />
+            <rect x="6" y="6" width="12" height="12" />
+          </svg>
+          <span class="dock-label">Mandala</span>
+        </button>
+        <button class="dock-item dock-action" id="btnQrModal" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+            <path d="M14 14h3v3h-3zM18 18h3v3h-3z" />
+          </svg>
+          <span class="dock-label">Sync QR</span>
+        </button>
+        <button class="dock-item dock-action" id="btnFullscreen" tabindex="-1">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+          </svg>
+          <span class="dock-label">Full</span>
+        </button>
+      </nav>
+    </section>
+
+    <!-- СЕКЦІЯ 2: PRO STUDIO CONTROLLER DECK -->
+    <section class="mobile-vj-deck" id="mobileDeck" aria-label="Мобільний VJ Пульт">
+      <!-- Банер швидкого підключення мікрофона для мобільного пульта -->
+      <div class="mic-start-banner" id="micStartBanner">
+        <div class="mic-start-content">
+          <svg class="ico ico-pulse" viewBox="0 0 24 24">
+            <rect x="9" y="2" width="6" height="11" rx="3" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8" />
+          </svg>
+          <div class="mic-start-texts">
+            <strong>Синхронізація мікрофона</strong>
+            <span>Торкніться, щоб транслювати звук на проектор</span>
+          </div>
+        </div>
+        <button class="btn-mic-start" id="btnStartRemoteMic">СТАРТ 🎙️</button>
+      </div>
+
+      <!-- Джерело аудіосигналу DSP -->
+      <div class="deck-card source-strip">
+        <div class="strip-header">
+          <span class="strip-title">
+            <svg class="ico" viewBox="0 0 24 24">
+              <path d="M2 12h3l3-8 4 16 3-8h7" />
+            </svg>
+            AUDIO INPUT BUS (DSP)
+          </span>
+          <div class="strip-actions">
+            <button class="mic-boost-pill" id="btnMicBoost" title="Чутливість мікрофона (Boost x1 / x2.5 / x4.5)">
+              <svg class="ico" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span id="txtMicBoost">BOOST 2.5X</span>
+            </button>
+            <label class="toggle-pill" title="Вимкнути/увімкнути звук синтезатора">
+              <input type="checkbox" id="chkSynthAudio" checked />
+              <span>SYNTH MONITOR</span>
+            </label>
+          </div>
+        </div>
+        <div class="source-pills" id="sourceContainer">
+          <button class="src-pill active" data-source="synth" tabindex="0">
+            <svg class="ico" viewBox="0 0 24 24">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <line x1="8" y1="5" x2="8" y2="13" />
+              <line x1="12" y1="5" x2="12" y2="13" />
+              <line x1="16" y1="5" x2="16" y2="13" />
+            </svg>
+            <span>Synth 128</span>
+          </button>
+          <button class="src-pill" data-source="mic" tabindex="-1">
+            <svg class="ico" viewBox="0 0 24 24">
+              <rect x="9" y="2" width="6" height="11" rx="3" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8" />
+            </svg>
+            <span>Mic Sensor</span>
+            <span class="mic-live-dot" id="micLiveDot" title="Активний захват аудіо"></span>
+          </button>
+          <button class="src-pill" data-source="native_android" tabindex="-1">
+            <svg class="ico" viewBox="0 0 24 24">
+              <polygon points="10 8 16 12 10 16 10 8" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            <span>YT Music (APK)</span>
+          </button>
+          <button class="src-pill" data-source="file" tabindex="-1">
+            <svg class="ico" viewBox="0 0 24 24">
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+            <span>Audio File</span>
+          </button>
+        </div>
+        <input type="file" id="audioFileInput" accept="audio/*" hidden />
+      </div>
+
+      <!-- Вкладки студії: Сцени / Filmora FX / TouchDesigner CHOP Ноди / Відео & Камера -->
+      <div class="studio-tabs" role="tablist" aria-label="Інструменти VJ-студії">
+        <button class="studio-tab active" data-tab="tabScenes" role="tab">
+          <svg class="ico" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          <span>Сцени & XY</span>
+          <span class="kbd-hint">Q</span>
+        </button>
+        <button class="studio-tab" data-tab="tabFilmoraFx" role="tab">
+          <svg class="ico" viewBox="0 0 24 24">
+            <polygon points="12 2 2 7 12 12 22 7 12 2" />
+            <polyline points="2 12 12 17 22 12" />
+            <polyline points="2 17 12 22 22 17" />
+          </svg>
+          <span>FX Шари</span>
+          <span class="kbd-hint">E</span>
+        </button>
+        <button class="studio-tab" data-tab="tabTdNodes" role="tab">
+          <svg class="ico" viewBox="0 0 24 24">
+            <circle cx="6" cy="6" r="2.5" />
+            <circle cx="18" cy="18" r="2.5" />
+            <path d="M8.5 6H12a4 4 0 0 1 4 4v5.5" />
+          </svg>
+          <span>CHOP Матриця</span>
+          <span class="kbd-hint">R</span>
+        </button>
+        <button class="studio-tab" data-tab="tabMediaTop" role="tab">
+          <svg class="ico" viewBox="0 0 24 24">
+            <polygon points="23 7 16 12 23 17 23 7" />
+            <rect x="1" y="5" width="15" height="14" rx="2" />
+          </svg>
+          <span>Медіа Вхід</span>
+          <span class="kbd-hint">T</span>
+        </button>
+        <button
+          class="studio-tab desktop-only-tab"
+          data-tab="tabAll"
+          role="tab"
+          title="Повний пульт: всі 4 рэки одночасно (Клавіша A)"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="3" y1="9" x2="21" y2="9" />
+            <line x1="9" y1="21" x2="9" y2="9" />
+          </svg>
+          <span>Консоль (Все)</span>
+          <span class="kbd-hint">A</span>
+        </button>
+      </div>
+
+      <!-- ВКЛАДКА 1: 9 ГЕНЕРАТИВНИХ СЦЕН + XY MORPH TOUCHPAD -->
+      <div class="studio-panel active" id="tabScenes">
+        <div class="preset-grid" id="presetGrid" aria-label="Візуальні сцени">
+          <button class="vj-pad active" data-mode="lasers" tabindex="0">
+            <div class="pad-top-row">
+              <svg class="ico" viewBox="0 0 24 24">
+                <path d="M12 2L2 22M12 2l10 20M12 2v20M4.5 17h15" />
+              </svg>
+              <span class="pad-code">SCN-01</span>
+              <span class="kbd-hint">1</span>
+            </div>
+            <span class="pad-name">Galvo Laser</span>
+            <span class="pad-sub">X-Y Scan & Nebula</span>
+          </button>
+
+          <button class="vj-pad" data-mode="blobtrack" tabindex="-1">
+            <div class="pad-top-row">
+              <svg class="ico" viewBox="0 0 24 24">
+                <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span class="pad-code">SCN-02</span>
+              <span class="kbd-hint">2</span>
+            </div>
+            <span class="pad-name">TD Blob Track</span>
+            <span class="pad-sub">Computer Vision CV</span>
+          </button>
+
+          <button class="vj-pad" data-mode="pointcloud" tabindex="-1">
+            <div class="pad-top-row">
+              <svg class="ico" viewBox="0 0 24 24">
+                <circle cx="6" cy="6" r="1.5" />
+                <circle cx="18" cy="7" r="1.5" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="7" cy="18" r="1.5" />
+                <circle cx="17" cy="17" r="1.5" />
+                <path d="M6 6l6 6 6-5M7 18l5-6 5 5" />
+              </svg>
+              <span class="pad-code">SCN-03</span>
+              <span class="kbd-hint">3</span>
+            </div>
+            <span class="pad-name">TD Point Cloud</span>
+            <span class="pad-sub">3D Curl & Plexus</span>
+          </button>
+
+          <button class="vj-pad" data-mode="reaction" tabindex="-1">
+            <div class="pad-top-row">
+              <svg class="ico" viewBox="0 0 24 24">
+                <path d="M2 12c3-6 6-6 9 0s6 6 11 0" />
+                <path d="M2 17c3-6 6-6 9 0s6 6 11 0" />
+              </svg>
+              <span class="pad-code">SCN-04</span>
+              <span class="kbd-hint">4</span>
+            </div>
+            <span class="pad-name">TD Reaction</span>
+            <span class="pad-sub">Feedback Displace</span>
+          </button>
+
+          <button class="vj-pad" data-mode="synthwave" tabindex="-1">
+            <div class="pad-top-row">
+              <svg class="ico" viewBox="0 0 24 24">
+                <polygon points="12 3 2 20 22 20 12 3" />
+                <line x1="2" y1="15" x2="22" y2="15" />
+              </svg>
+              <span class="pad-code">SCN-05</span>
+              <span class="kbd-hint">5</span>
+            </div>
+            <span class="pad-name">3D Terrain</span>
+            <span class="pad-sub">Horizon Wireframe</span>
+          </button>
+
+          <button class="vj-pad" data-mode="ferrofluid" tabindex="-1">
+            <div class="pad-top-row">
+              <svg class="ico" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="6" />
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+              </svg>
+              <span class="pad-code">SCN-06</span>
+              <span class="kbd-hint">6</span>
+            </div>
+            <span class="pad-name">Ferrofluid</span>
+            <span class="pad-sub">Magnetic Sphere</span>
+          </button>
+
+          <button class="vj-pad" data-mode="tunnel" tabindex="-1">
+            <div class="pad-top-row">
+              <svg class="ico" viewBox="0 0 24 24">
+                <polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2" />
+                <polygon points="12 7 16.5 9.5 16.5 14.5 12 17 7.5 14.5 7.5 9.5 12 7" />
+              </svg>
+              <span class="pad-code">SCN-07</span>
+              <span class="kbd-hint">7</span>
+            </div>
+            <span class="pad-name">Infinity Tunnel</span>
+            <span class="pad-sub">Vector Depth</span>
+          </button>
+
+          <button class="vj-pad" data-mode="liquid" tabindex="-1">
+            <div class="pad-top-row">
+              <svg class="ico" viewBox="0 0 24 24">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+              </svg>
+              <span class="pad-code">SCN-08</span>
+              <span class="kbd-hint">8</span>
+            </div>
+            <span class="pad-name">Silk Aura</span>
+            <span class="pad-sub">Harmonic Waves</span>
+          </button>
+
+          <button class="vj-pad" data-mode="fractal" tabindex="-1">
+            <div class="pad-top-row">
+              <svg class="ico" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" transform="rotate(45 12 12)" />
+                <rect x="6" y="6" width="12" height="12" />
+              </svg>
+              <span class="pad-code">SCN-09</span>
+              <span class="kbd-hint">9</span>
+            </div>
+            <span class="pad-name">Sacred Geometry</span>
+            <span class="pad-sub">Iterated Fractal</span>
+          </button>
+        </div>
+
+        <!-- Інтерактивний XY MORPH TOUCHPAD -->
+        <div class="xy-pad-wrapper">
+          <div class="xy-pad" id="xyPad" title="Керування XY модуляцією (Перетягування мишею, стрілки на клавіатурі, подвійний клік для центрування)">
+            <span class="xy-axis-label top">AXIS Y · MODULATION SPEED</span>
+            <span class="xy-coords-badge" id="xyCoordsBadge">X: 50% · Y: 50%</span>
+            <span class="xy-axis-label bottom">AXIS X · GEOMETRY SPREAD</span>
+            <div class="xy-puck" id="xyPuck" style="left: 50%; top: 50%">
+              <div class="xy-puck-ring"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 2: КОНСТРУКТОР ШАРІВ FILMORA FX (НАКЛАДАЮТЬСЯ ОДНОЧАСНО) -->
+      <div class="studio-panel" id="tabFilmoraFx">
+        <div class="deck-card fx-studio-card">
+          <div class="strip-header">
+            <span class="strip-title">POST-PROCESSING FX STACK</span>
+            <label class="toggle-pill">
+              <input type="checkbox" id="chkBlobHud" />
+              <span>TD CV OVERLAY</span>
+            </label>
+          </div>
+          <div class="fx-preset-chips" id="fxPresetBar">
+            <button class="fx-chip active" data-fx-preset="clean">Bypass (Clean)</button>
+            <button class="fx-chip" data-fx-preset="vhs">VHS Glitch</button>
+            <button class="fx-chip" data-fx-preset="td_cv">TD Blob Vision</button>
+            <button class="fx-chip" data-fx-preset="acid">Mirror Kaleido</button>
+            <button class="fx-chip" data-fx-preset="led">LED Matrix</button>
+          </div>
+
+          <div class="fx-sliders-grid">
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>RGB Chromatic Split</span>
+                <strong id="val_rgbSplit">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="rgbSplit"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>VHS Slice Glitch</span>
+                <strong id="val_glitch">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="glitch"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>Mirror Kaleidoscope</span>
+                <strong id="val_kaleido">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="kaleido"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>Sobel Edge Contour</span>
+                <strong id="val_edges">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="edges"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>Curl Feedback Warp</span>
+                <strong id="val_feedback">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="feedback"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>Halftone LED Matrix</span>
+                <strong id="val_pixelate">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="pixelate"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 3: TOUCHDESIGNER AUDIO-CHOP МАТРИЦЯ МОДУЛЯЦІЇ ТА ЗБЕРЕЖЕННЯ ПРЕСЕТІВ -->
+      <div class="studio-panel" id="tabTdNodes">
+        <div class="deck-card td-patch-card">
+          <div class="strip-header">
+            <span class="strip-title">TOUCHDESIGNER AUDIO-CHOP ROUTER</span>
+            <div class="td-header-actions">
+              <button class="mini-action-btn" id="btnRandomPatch">RANDOMIZE</button>
+              <button class="mini-action-btn save" id="btnSaveUserPreset">SAVE PATCH</button>
+            </div>
+          </div>
+          <p class="td-hint">
+            Призначте частотний канал аудіо (CHOP Export) для автоматичної модуляції кожного FX-параметра:
+          </p>
+
+          <div class="chop-matrix">
+            <div class="chop-row">
+              <span class="chop-param">RGB Split</span>
+              <select class="chop-select" data-chop="rgbSplit">
+                <option value="none">Manual Only</option>
+                <option value="subBass" selected>SUB (20-60Hz)</option>
+                <option value="bass">BASS (60-250Hz)</option>
+                <option value="mid">MID (250-2.5kHz)</option>
+                <option value="high">HIGH (2.5-16kHz)</option>
+                <option value="lfo">LFO Sine Wave</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_rgbSplit"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">VHS Glitch</span>
+              <select class="chop-select" data-chop="glitch">
+                <option value="none" selected>Manual Only</option>
+                <option value="subBass">SUB (20-60Hz)</option>
+                <option value="bass">BASS (60-250Hz)</option>
+                <option value="mid">MID (250-2.5kHz)</option>
+                <option value="high">HIGH (2.5-16kHz)</option>
+                <option value="lfo">LFO Sine Wave</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_glitch"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">Kaleidoscope</span>
+              <select class="chop-select" data-chop="kaleido">
+                <option value="none" selected>Manual Only</option>
+                <option value="subBass">SUB (20-60Hz)</option>
+                <option value="bass">BASS (60-250Hz)</option>
+                <option value="mid">MID (250-2.5kHz)</option>
+                <option value="high">HIGH (2.5-16kHz)</option>
+                <option value="lfo">LFO Sine Wave</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_kaleido"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">Edge Contour</span>
+              <select class="chop-select" data-chop="edges">
+                <option value="none" selected>Manual Only</option>
+                <option value="subBass">SUB (20-60Hz)</option>
+                <option value="bass">BASS (60-250Hz)</option>
+                <option value="mid">MID (250-2.5kHz)</option>
+                <option value="high">HIGH (2.5-16kHz)</option>
+                <option value="lfo">LFO Sine Wave</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_edges"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">Feedback Warp</span>
+              <select class="chop-select" data-chop="feedback">
+                <option value="none">Manual Only</option>
+                <option value="subBass">SUB (20-60Hz)</option>
+                <option value="bass" selected>BASS (60-250Hz)</option>
+                <option value="mid">MID (250-2.5kHz)</option>
+                <option value="high">HIGH (2.5-16kHz)</option>
+                <option value="lfo">LFO Sine Wave</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_feedback"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">LED Matrix</span>
+              <select class="chop-select" data-chop="pixelate">
+                <option value="none" selected>Manual Only</option>
+                <option value="subBass">SUB (20-60Hz)</option>
+                <option value="bass">BASS (60-250Hz)</option>
+                <option value="mid">MID (250-2.5kHz)</option>
+                <option value="high">HIGH (2.5-16kHz)</option>
+                <option value="lfo">LFO Sine Wave</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_pixelate"></div></div>
+            </div>
+          </div>
+
+          <div class="user-presets-bar" id="userPresetsBar"></div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 4: МЕДІА-МІКШЕР (ВЛАСНЕ ВІДЕО / ФОТО / ЖИВА КАМЕРА ПІД ШЕЙДЕРИ) -->
+      <div class="studio-panel" id="tabMediaTop">
+        <div class="deck-card media-top-card">
+          <div class="strip-header">
+            <span class="strip-title">VIDEO / CAMERA INPUT (MEDIA TOP)</span>
+            <button class="mini-action-btn" id="btnClearMedia">EJECT MEDIA</button>
+          </div>
+          <p class="td-hint">
+            Завантажте відеокліп, фото або увімкніть живу камеру для накладання шейдерів та ефектів:
+          </p>
+
+          <div class="media-buttons-row">
+            <button class="media-btn" id="btnUploadMedia">
+              <svg class="ico" viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span>Load Video / Image</span>
+            </button>
+            <button class="media-btn" id="btnLiveCamera">
+              <svg class="ico" viewBox="0 0 24 24">
+                <polygon points="23 7 16 12 23 17 23 7" />
+                <rect x="1" y="5" width="15" height="14" rx="2" />
+              </svg>
+              <span>Live Camera Input</span>
+            </button>
+          </div>
+          <input
+            type="file"
+            id="mediaFileInput"
+            accept="video/*,image/*"
+            hidden
+          />
+
+          <div class="fx-slider-row" style="margin-top: 10px">
+            <div class="fx-slider-label">
+              <span>Media Mix Level (Video ↔ Shader)</span>
+              <strong id="val_mediaMix">0%</strong>
+            </div>
+            <input
+              type="range"
+              id="rangeMediaMix"
+              min="0"
+              max="100"
+              value="0"
+            />
+          </div>
+
+          <div class="fx-preset-chips" style="margin-top: 10px">
+            <button class="fx-chip active" data-media-mode="0">
+              Screen Composite
+            </button>
+            <button class="fx-chip" data-media-mode="1">
+              Audio Bass Displace
+            </button>
+            <button class="fx-chip" data-media-mode="2">
+              Luma Contour Mask
+            </button>
+          </div>
+
+          <!-- B2B VENUE OVERLAY & KEYSTONE ROOM MASKING (PRO FEATURES) -->
+          <div class="pro-venue-box">
+            <div class="strip-header" style="margin-top: 12px">
+              <span class="strip-title">💎 B2B VENUE SIGN & KEYSTONE MASK (PRO)</span>
+              <label class="toggle-pill">
+                <input type="checkbox" id="chkVenueOverlay" />
+                <span>SHOW SIGN</span>
+              </label>
+            </div>
+            <div class="venue-inputs-row">
+              <input
+                type="text"
+                id="inputVenueTitle"
+                maxlength="28"
+                placeholder="НАЗВА ЗАКЛАДУ / DJ (NEON BAR)"
+              />
+              <input
+                type="text"
+                id="inputVenueSub"
+                maxlength="36"
+                placeholder="Підпис (WIFI: aura2026 / @dj_max)"
+              />
+            </div>
+            <div class="fx-sliders-grid" style="margin-top: 8px">
+              <div class="fx-slider-row">
+                <div class="fx-slider-label">
+                  <span>Keystone Scale (Зум стіни)</span>
+                  <strong id="val_keystoneScale">100%</strong>
+                </div>
+                <input
+                  type="range"
+                  id="rangeKeystoneScale"
+                  min="50"
+                  max="100"
+                  value="100"
+                />
+              </div>
+              <div class="fx-slider-row">
+                <div class="fx-slider-label">
+                  <span>Room Border Mask (Обрізка країв)</span>
+                  <strong id="val_keystoneCrop">0%</strong>
+                </div>
+                <input
+                  type="range"
+                  id="rangeKeystoneCrop"
+                  min="0"
+                  max="35"
+                  value="0"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 ТАКТИЛЬНІ КЛАВІШІ TRG-FX (TEENAGE ENGINEERING SYNTH KEYS) -->
+      <div class="fx-row" id="fxRow">
+        <button class="fx-btn strobe" id="fxStrobe" title="Стробоскоп (Утримувати Space)">
+          <div class="fx-btn-head">
+            <small>TRG-01</small>
+            <span class="kbd-hint">SPACE</span>
+            <svg class="ico" viewBox="0 0 24 24">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+          </div>
+          <span>STROBE</span>
+        </button>
+        <button class="fx-btn shockwave" id="fxShockwave" title="Ударна хвиля (Клавіша W)">
+          <div class="fx-btn-head">
+            <small>TRG-02</small>
+            <span class="kbd-hint">W</span>
+            <svg class="ico" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" />
+              <circle cx="12" cy="12" r="4" />
+            </svg>
+          </div>
+          <span>SHOCKWAVE</span>
+        </button>
+        <button class="fx-btn freeze" id="fxFreeze" title="Заморозка кадру (Клавіша F)">
+          <div class="fx-btn-head">
+            <small>TRG-03</small>
+            <span class="kbd-hint">F</span>
+            <svg class="ico" viewBox="0 0 24 24">
+              <rect x="6" y="4" width="4" height="16" />
+              <rect x="14" y="4" width="4" height="16" />
+            </svg>
+          </div>
+          <span>FREEZE</span>
+        </button>
+        <button class="fx-btn colordrop" id="fxColorDrop" title="Зміна колірної палітри (Клавіша C)">
+          <div class="fx-btn-head">
+            <small>TRG-04</small>
+            <span class="kbd-hint">C</span>
+            <svg class="ico" viewBox="0 0 24 24">
+              <circle cx="13.5" cy="6.5" r="2.5" />
+              <circle cx="17.5" cy="10.5" r="2.5" />
+              <circle cx="8.5" cy="7.5" r="2.5" />
+              <circle cx="6.5" cy="12.5" r="2.5" />
+              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-4.96-4.49-9-10-9z" />
+            </svg>
+          </div>
+          <span>PALETTE</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Модальне вікно QR-підключення смартфона до проектора -->
+    <div class="qr-modal" id="qrModal" hidden>
+      <div class="qr-card">
+        <h3>LAN SYNC · iPhone ↔ Projector</h3>
+        <p>
+          Скануйте QR-код камерою iPhone / Android для відкриття пульта у спільній Wi-Fi мережі (надшвидка передача звуку та ритму &lt; 1 ms):
+        </p>
+        <div class="qr-box" id="qrCodeBox"></div>
+        <div class="room-input-row">
+          <input
+            type="text"
+            id="roomInput"
+            maxlength="8"
+            placeholder="ROOM ID (4821)"
+          />
+          <button id="btnJoinRoom" class="join-room-btn">CONNECT</button>
+        </div>
+        <div class="remote-url" id="remoteUrlText"></div>
+        <button class="close-modal-btn" id="btnCloseQr">CLOSE</button>
+      </div>
+    </div>
+
+    <!-- Модальне вікно комерційної підписки та активації AURA VJ PRO -->
+    <div class="qr-modal" id="proModal" hidden>
+      <div class="qr-card pro-modal-card">
+        <div class="pro-modal-badge">COMMERCIAL & PRO STUDIO</div>
+        <h3>AURA VJ <strong>PRO</strong> LICENSE</h3>
+        <p id="proModalStatusDesc">
+          Розблокуйте всі 9 TouchDesigner сцен, 6-шаровий Filmora FX стек, B2B-вивіску для закладів, Keystone-маску та приберіть водяний знак.
+        </p>
+
+        <div class="pro-plans-grid">
+          <div class="pro-plan-card" data-plan="monthly">
+            <span class="plan-name">CREATOR PASS</span>
+            <strong class="plan-price">$4.99<small>/міс</small></strong>
+            <span class="plan-sub">Всі 9 сцен + Без водяного знака</span>
+          </div>
+          <div class="pro-plan-card featured" data-plan="lifetime">
+            <span class="plan-tag">BEST VALUE</span>
+            <span class="plan-name">LIFETIME PRO</span>
+            <strong class="plan-price">$24.99<small> назавжди</small></strong>
+            <span class="plan-sub">FX Lab + CHOP + Keystone + B2B</span>
+          </div>
+        </div>
+
+        <div class="room-input-row" style="margin-top: 12px">
+          <input
+            type="text"
+            id="proLicenseInput"
+            maxlength="24"
+            placeholder="Ключ (напр. AURA-PRO-2026)"
+          />
+          <button id="btnActivateKey" class="join-room-btn pro-accent-btn">ACTIVATE</button>
+        </div>
+
+        <button id="btnInstantProDemo" class="pro-demo-btn">
+          ⚡ Увімкнути PRO Режим (Тестова Активація в 1 клік)
+        </button>
+
+        <button class="close-modal-btn" id="btnCloseProModal" style="margin-top: 8px">
+          CLOSE
+        </button>
+      </div>
+    </div>
+
+    <!-- Модальне вікно гарячих клавіш для десктопу (Keyboard Shortcuts) -->
+    <div class="qr-modal shortcuts-modal" id="shortcutsModal" hidden>
+      <div class="qr-card shortcuts-card">
+        <div class="shortcuts-header">
+          <div class="shortcuts-title-row">
+            <svg class="ico ico-lg" viewBox="0 0 24 24">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <line x1="6" y1="8" x2="6" y2="8" />
+              <line x1="10" y1="8" x2="10" y2="8" />
+              <line x1="14" y1="8" x2="14" y2="8" />
+              <line x1="18" y1="8" x2="18" y2="8" />
+              <line x1="6" y1="12" x2="6" y2="12" />
+              <line x1="18" y1="12" x2="18" y2="12" />
+              <line x1="8" y1="16" x2="16" y2="16" />
+            </svg>
+            <h3>DESKTOP VJ KEYBOARD SHORTCUTS</h3>
+          </div>
+          <span class="shortcuts-sub">Швидке керування пультом із клавіатури ПК/Mac без миші</span>
+        </div>
+
+        <div class="shortcuts-grid">
+          <div class="shortcut-group">
+            <span class="shortcut-group-title">ПЕРЕМИКАННЯ СЦЕН (1-9)</span>
+            <div class="shortcut-item">
+              <kbd>1</kbd>
+              <span>Galvo Laser (SCN-01)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>2</kbd>
+              <span>TD Blob Track (SCN-02)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>3</kbd>
+              <span>TD Point Cloud (SCN-03)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>4</kbd>
+              <span>TD Reaction (SCN-04)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>5</kbd>
+              <span>3D Terrain (SCN-05)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>6</kbd>
+              <span>Ferrofluid (SCN-06)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>7</kbd>
+              <span>Infinity Tunnel (SCN-07)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>8</kbd>
+              <span>Silk Aura (SCN-08)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>9</kbd>
+              <span>Sacred Geometry (SCN-09)</span>
+            </div>
+          </div>
+
+          <div class="shortcut-group">
+            <span class="shortcut-group-title">ТАКТИЛЬНІ TRG-FX ТА СТУДІЯ</span>
+            <div class="shortcut-item">
+              <kbd>SPACE</kbd>
+              <span>STROBE Спалах (утримувати)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>W</kbd>
+              <span>SHOCKWAVE Ударна хвиля</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>F</kbd>
+              <span>FREEZE Заморозка кадру</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>C</kbd>
+              <span>PALETTE Зміна колірного зсуву</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>T</kbd>
+              <span>Вкладки Студії</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>A</kbd>
+              <span>Консоль (Всі 4 рэки разом)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>M</kbd>
+              <span>Mute / Монітор синтезатора</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>P</kbd>
+              <span>Сховати/показати Live Monitor прев'ю</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>V</kbd>
+              <span>Режим (Split / Проектор / Пульт)</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>
+              <span>Точне зміщення XY Puck</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>?</kbd> або <kbd>H</kbd>
+              <span>Ця довідка гарячих клавіш</span>
+            </div>
+          </div>
+        </div>
+
+        <button class="close-modal-btn" id="btnCloseShortcuts">ЗРОЗУМІЛО (ESC)</button>
+      </div>
+    </div>
+
+    <script src="dsp-engine.js?v=2.6.0"></script>
+    <script src="shader-visualizer.js?v=2.6.0"></script>
+    <script src="sync-manager.js?v=2.6.0"></script>
+    <script src="app.js?v=2.6.0"></script>
+  </body>
+</html>

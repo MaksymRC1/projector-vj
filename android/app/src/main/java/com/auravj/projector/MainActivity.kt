@@ -59,8 +59,8 @@ class MainActivity : AppCompatActivity() {
 
         prefs = getSharedPreferences("aura_vj_prefs", Context.MODE_PRIVATE)
 
-        // Запускаємо автономний локальний WebSocket сервер на проекторі (порт 3456)
-        embeddedServer = EmbeddedLanServer(this, 3456)
+        // Запускаємо автономний локальний сервер на проекторі (HTTP: 3456, HTTPS: 3457)
+        embeddedServer = EmbeddedLanServer(this, 3456, 3457)
         embeddedServer?.start()
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
