@@ -77,7 +77,8 @@ class MainActivity : AppCompatActivity() {
         settings.allowContentAccess = true
         settings.cacheMode = WebSettings.LOAD_NO_CACHE
 
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        // LAYER_TYPE_NONE дозволяє апаратному композитору Android виводити WebGL напряму без проміжного FBO-текстурування на Mali-G31
+        webView.setLayerType(View.LAYER_TYPE_NONE, null)
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(
                 view: WebView?,

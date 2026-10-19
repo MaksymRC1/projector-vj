@@ -488,8 +488,8 @@ class DSPEngine {
       const dt = Math.min(0.1, Math.max(0.001, (now - this.lastRemoteUpdateFrame) / 1000));
       this.lastRemoteUpdateFrame = now;
 
-      if (now - this.lastRemoteTelemetryTime > 3000) {
-        return this.getEmptyState();
+      if (now - this.lastRemoteTelemetryTime > 1500) {
+        return this.getAutonomousState(now);
       }
 
       // Швидка атака (0.82) для миттєвої реакції на бочку та плавний спад (0.34)
@@ -680,21 +680,40 @@ class DSPEngine {
     return count > 0 ? sum / count : 0;
   }
 
-  getEmptyState() {
+  getAutonomousState(now = performance.now()) {
+    const bpm = 128;
+    const beatPeriod = 60000 / bpm; // 468.75 ms
+    const phase = (now % beatPeriod) / beatPeriod;
+    const kick = Math.pow(Math.max(0, 1.0 - phase * 3.0), 2.5);
+    const t = now * 0.001;
+
+    // Живий органічний техно-ритм: суб-бас, бочка та гармоніки, щоб проектор ніколи не гаснув
+    const subBass = 0.35 + kick * 0.65;
+    const bass = 0.3 + Math.sin(t * 3.0) * 0.2 + kick * 0.35;
+    const mid = 0.35 + Math.sin(t * 5.2) * 0.25;
+    const high = 0.3 + Math.abs(Math.sin(t * 11.0)) * 0.4;
+    const energy = subBass * 0.45 + bass * 0.25 + mid * 0.2 + high * 0.1;
+    const isBeat = phase < 0.08;
+
     return {
-      subBass: 0.05,
-      bass: 0.05,
-      mid: 0.05,
-      high: 0.05,
-      energy: 0.05,
-      isBeat: false,
-      beatIntensity: 0,
-      beatCount: 0,
+      subBass,
+      bass,
+      mid,
+      high,
+      energy,
+      isBeat,
+      beatIntensity: kick,
+      beatCount: Math.floor(now / beatPeriod),
       bpm: 128,
-      beatPhase: (performance.now() % 468) / 468,
+      beatPhase: phase,
+      remoteTime: null,
       freqData: this.freqData,
       waveData: this.waveData,
     };
+  }
+
+  getEmptyState() {
+    return this.getAutonomousState();
   }
 
   stop() {

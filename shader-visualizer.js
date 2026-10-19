@@ -13,9 +13,19 @@ class ShaderVisualizer {
     this.overlayCanvas = overlayCanvas || document.getElementById("tdOverlayCanvas");
     this.overlayCtx = this.overlayCanvas ? this.overlayCanvas.getContext("2d") : null;
 
+    const isMobileOrTv =
+      /Android|TV|GoogleTV|SmartTV|CrKey|Tizen|webOS/i.test(navigator.userAgent) ||
+      !!window.AndroidAudioBridge;
+
     this.gl =
-      canvas.getContext("webgl", { alpha: false, antialias: true, preserveDrawingBuffer: true }) ||
-      canvas.getContext("experimental-webgl");
+      canvas.getContext("webgl", {
+        alpha: false,
+        antialias: !isMobileOrTv,
+        preserveDrawingBuffer: false,
+        powerPreference: "high-performance",
+        depth: false,
+        stencil: false,
+      }) || canvas.getContext("experimental-webgl");
 
     this.modeIndex = 0;
     this.modes = [
@@ -94,9 +104,13 @@ class ShaderVisualizer {
     };
 
     // Auto-FPS Optimizer для бюджетних проекторів (Magcubic HY300 / Mali-G31)
-    this.renderScale = 1.0;
-    this.rawViewportWidth = 1280;
-    this.rawViewportHeight = 720;
+    const isMobileOrTv =
+      /Android|TV|GoogleTV|SmartTV|CrKey|Tizen|webOS/i.test(navigator.userAgent) ||
+      !!window.AndroidAudioBridge;
+
+    this.renderScale = isMobileOrTv ? 0.75 : 1.0;
+    this.rawViewportWidth = isMobileOrTv ? 1280 : 1920;
+    this.rawViewportHeight = isMobileOrTv ? 720 : 1080;
     this.fpsFrames = 0;
     this.fpsLastCheck = performance.now();
     this.currentFps = 60;
@@ -144,17 +158,20 @@ class ShaderVisualizer {
 
   setupResizeObserver() {
     const observer = new ResizeObserver(([entry]) => {
-      const dpc = entry.devicePixelContentBoxSize;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = dpc
-        ? Math.min(dpc[0].inlineSize, Math.round(entry.contentRect.width * 2))
-        : Math.round(entry.contentRect.width * dpr);
-      const h = dpc
-        ? Math.min(dpc[0].blockSize, Math.round(entry.contentRect.height * 2))
-        : Math.round(entry.contentRect.height * dpr);
+      const isMobileOrTv =
+        /Android|TV|GoogleTV|SmartTV|CrKey|Tizen|webOS/i.test(navigator.userAgent) ||
+        !!window.AndroidAudioBridge;
 
-      this.rawViewportWidth = Math.max(320, w);
-      this.rawViewportHeight = Math.max(180, h);
+      // Для проекторів і ТВ обмежуємо DPR строго 1.0 (замість 2.0-3.0), щоб усунути навантаження 4K на Mali-G31
+      const maxDpr = isMobileOrTv ? 1.0 : Math.min(window.devicePixelRatio || 1, 1.25);
+      const w = Math.round(entry.contentRect.width * maxDpr);
+      const h = Math.round(entry.contentRect.height * maxDpr);
+
+      // На проекторах обмежуємо базову роздільну здатність максимум 1280x720 (720p)
+      const maxW = isMobileOrTv ? 1280 : 1920;
+      const maxH = isMobileOrTv ? 720 : 1080;
+      this.rawViewportWidth = Math.max(320, Math.min(maxW, w));
+      this.rawViewportHeight = Math.max(180, Math.min(maxH, h));
       this.applyCanvasResolution();
     });
 
@@ -183,10 +200,16 @@ class ShaderVisualizer {
     `;
 
     const fsSource = `
-      precision highp float;
+      #ifdef GL_FRAGMENT_PRECISION_HIGH
+        precision mediump float;
+        precision highp int;
+      #else
+        precision mediump float;
+        precision mediump int;
+      #endif
 
-      uniform vec2 u_resolution;
-      uniform float u_time;
+      uniform highp vec2 u_resolution;
+      uniform highp float u_time;
       uniform int u_mode;
       uniform float u_subBass;
       uniform float u_bass;
@@ -1087,17 +1110,17 @@ class ShaderVisualizer {
   updateAutoFpsScaler(now) {
     this.fpsFrames++;
     const elapsed = now - this.fpsLastCheck;
-    if (elapsed >= 1500) {
+    if (elapsed >= 900) {
       this.currentFps = Math.round((this.fpsFrames * 1000) / elapsed);
       this.fpsFrames = 0;
       this.fpsLastCheck = now;
 
-      // Якщо FPS просідає на бюджетному проекторі — знижуємо внутрішній буфер WebGL
-      if (this.currentFps < 42 && this.renderScale > 0.6) {
-        this.renderScale = Math.max(0.55, Number((this.renderScale - 0.2).toFixed(2)));
+      // Якщо FPS просідає на бюджетному проекторі (< 46 FPS) — знижуємо внутрішній буфер WebGL
+      if (this.currentFps < 46 && this.renderScale > 0.5) {
+        this.renderScale = Math.max(0.5, Number((this.renderScale - 0.15).toFixed(2)));
         this.applyCanvasResolution();
       } else if (this.currentFps >= 57 && this.renderScale < 1.0) {
-        this.renderScale = Math.min(1.0, Number((this.renderScale + 0.15).toFixed(2)));
+        this.renderScale = Math.min(1.0, Number((this.renderScale + 0.1).toFixed(2)));
         this.applyCanvasResolution();
       }
     }

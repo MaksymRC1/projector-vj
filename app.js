@@ -42,7 +42,7 @@ class AuraVJApp {
     this.setupDesktopShortcuts();
     this.setupDesktopMouseInteractions();
     this.setupPeerSyncHeartbeat();
-    this.requestScreenWakeLock();
+    this.setupScreenKeepAlive();
 
     // Запускаємо рендер-цикл одразу (навіть до першого кліку працює візуальне демо)
     this.lastFrame = performance.now();
@@ -103,19 +103,62 @@ class AuraVJApp {
     }
   }
 
-  async requestScreenWakeLock() {
-    if ("wakeLock" in navigator) {
-      try {
-        this.wakeLock = await navigator.wakeLock.request("screen");
-      } catch {}
-    }
-    document.addEventListener("visibilitychange", async () => {
-      if (document.visibilityState === "visible" && "wakeLock" in navigator) {
+  setupScreenKeepAlive() {
+    this.keepAliveVideo = null;
+
+    const enableKeepAlive = async () => {
+      // 1. Native Screen WakeLock API
+      if ("wakeLock" in navigator) {
         try {
           this.wakeLock = await navigator.wakeLock.request("screen");
         } catch {}
       }
+
+      // 2. Безперервний фоновий 1x1 беззвучний цикл відео для iOS Safari / Chrome Mobile (NoSleep патерн)
+      // На iPhone / Android це запобігає засинанню екрана та скиданню фокусу мікрофона
+      if (!this.keepAliveVideo) {
+        try {
+          const video = document.createElement("video");
+          video.setAttribute("playsinline", "");
+          video.setAttribute("webkit-playsinline", "");
+          video.setAttribute("muted", "");
+          video.muted = true;
+          video.loop = true;
+          video.width = 1;
+          video.height = 1;
+          video.style.position = "fixed";
+          video.style.left = "-100px";
+          video.style.top = "-100px";
+          video.style.opacity = "0.001";
+          video.style.pointerEvents = "none";
+          video.src =
+            "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAAhmcmVlAAAACG1kYXQAAAAIZmRzYwAAAAFtb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAAPoAAAAKAABAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+          document.body.appendChild(video);
+          this.keepAliveVideo = video;
+          const playPromise = video.play();
+          if (playPromise) playPromise.catch(() => {});
+        } catch {}
+      } else if (this.keepAliveVideo.paused) {
+        try {
+          this.keepAliveVideo.play().catch(() => {});
+        } catch {}
+      }
+    };
+
+    this.enableKeepAlive = enableKeepAlive;
+
+    // Активуємо при першому та наступних дотиках/кліках
+    window.addEventListener("pointerdown", enableKeepAlive, { passive: true });
+    window.addEventListener("touchstart", enableKeepAlive, { passive: true });
+    window.addEventListener("click", enableKeepAlive, { passive: true });
+
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState === "visible") {
+        enableKeepAlive();
+      }
     });
+
+    enableKeepAlive();
   }
 
   initUrlParams() {
@@ -1732,28 +1775,12 @@ class AuraVJApp {
     const hasLiveRemote =
       this.dsp.activeSource === "remote" &&
       this.dsp.lastRemoteTelemetryTime &&
-      now - this.dsp.lastRemoteTelemetryTime < 3000;
+      now - this.dsp.lastRemoteTelemetryTime < 1500;
 
     if (this.audioStarted || hasLiveRemote) {
       dspState = this.dsp.update(now);
     } else {
-      // Демо-біт синхронізовано за глобальним системним часом Date.now() між усіма пристроями
-      const wallMs = Date.now();
-      const t = (wallMs % 3600000) / 1000;
-      const beatPhase = (wallMs % 468.75) / 468.75;
-      const kick = Math.pow(Math.max(0, 1.0 - beatPhase * 3.2), 2.0);
-      dspState = {
-        subBass: 0.25 + kick * 0.72,
-        bass: 0.3 + Math.sin(t * 3.0) * 0.25 + kick * 0.3,
-        mid: 0.35 + Math.sin(t * 5.2) * 0.28,
-        high: 0.25 + Math.abs(Math.sin(t * 11.0)) * 0.45,
-        energy: 0.5,
-        isBeat: beatPhase < 0.08,
-        beatIntensity: kick,
-        beatCount: Math.floor((wallMs % 36000000) / 468.75),
-        bpm: 128,
-        beatPhase,
-      };
+      dspState = this.dsp.getAutonomousState(now);
     }
 
     // Якщо це Пульт (або Split з активним власним джерелом звуку) — транслюємо телеметрію + фазу часу на Проектор
@@ -1780,13 +1807,21 @@ class AuraVJApp {
         ],
       });
     } else if (hasLiveRemote && typeof dspState.remoteTime === "number") {
-      // Підтягуємо внутрішній час шейдерів проектора до часу пульта для 100% фазової синхронізації
-      const timeDiff = dspState.remoteTime - this.visualizer.accumulatedTime;
-      if (Math.abs(timeDiff) > 1.2) {
-        this.visualizer.accumulatedTime = dspState.remoteTime;
-      } else if (Math.abs(timeDiff) > 0.05) {
-        this.visualizer.accumulatedTime += timeDiff * 0.22;
+      // Підтягуємо внутрішній час шейдерів проектора до часу пульта ТІЛЬКИ якщо віддалений час просувається вперед!
+      if (
+        this.lastReceivedRemoteTime !== undefined &&
+        dspState.remoteTime > this.lastReceivedRemoteTime
+      ) {
+        const timeDiff = dspState.remoteTime - this.visualizer.accumulatedTime;
+        if (Math.abs(timeDiff) > 1.2) {
+          this.visualizer.accumulatedTime = dspState.remoteTime;
+        } else if (Math.abs(timeDiff) > 0.05) {
+          this.visualizer.accumulatedTime += timeDiff * 0.22;
+        }
       }
+      this.lastReceivedRemoteTime = dspState.remoteTime;
+    } else {
+      this.lastReceivedRemoteTime = undefined;
     }
 
     this.visualizer.render(dspState, now);
