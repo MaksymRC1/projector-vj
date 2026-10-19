@@ -28,7 +28,7 @@ class AuraFXStudio {
 
   setupUI() {
     const roomPill = document.getElementById("studioRoomPill");
-    if (roomPill) roomPill.textContent = `🔗 Кімната: ${this.sync.roomId}`;
+    if (roomPill) roomPill.textContent = `ROOM: ${this.sync.roomId}`;
     const backBtn = document.getElementById("btnBackToStage");
     if (backBtn) {
       backBtn.href = `index.html?room=${encodeURIComponent(this.sync.roomId)}`;
@@ -47,12 +47,12 @@ class AuraFXStudio {
 
     // Вибір базового генератора (TouchDesigner Generator TOP)
     const templateMeta = {
-      voronoi: { emoji: "🧬", name: "TD Voronoi", sub: "Клітинний неон" },
-      octahedron: { emoji: "💎", name: "3D Октаедр", sub: "Raymarch SDF" },
-      matrix: { emoji: "🟢", name: "Cyber Wave", sub: "Матриця & Хвиля" },
-      vortex: { emoji: "🌀", name: "Hypno Vortex", sub: "Лазерна спіраль" },
-      tesla: { emoji: "⚡", name: "Tesla Plasma", sub: "Електро-дуги" },
-      lasers_custom: { emoji: "🎆", name: "Laser Cross", sub: "Galvo Приціл" },
+      voronoi: { emoji: "USR-01", name: "TD Voronoi", sub: "Cellular TOP" },
+      octahedron: { emoji: "USR-02", name: "3D Октаедр", sub: "Raymarch SDF" },
+      matrix: { emoji: "USR-03", name: "Cyber Wave", sub: "Matrix Scope" },
+      vortex: { emoji: "USR-04", name: "Hypno Vortex", sub: "Spiral TOP" },
+      tesla: { emoji: "USR-05", name: "Tesla Plasma", sub: "Arc Solver" },
+      lasers_custom: { emoji: "USR-06", name: "Laser Cross", sub: "Galvo Target" },
     };
 
     document.querySelectorAll(".tpl-btn").forEach((btn) => {
@@ -238,17 +238,17 @@ return col;`;
     if (ok && !this.visualizer.lastShaderError) {
       this.visualizer.setMode(effectObj.id);
       if (badge) {
-        badge.textContent = "✅ GLSL Скомпільовано (60 FPS)";
-        badge.style.color = "#00f5d4";
+        badge.textContent = "GLSL OK · 60 FPS";
+        badge.style.color = "#10b981";
       }
     } else if (badge) {
-      badge.textContent = "⚠️ Помилка синтаксису GLSL";
-      badge.style.color = "#ff2a85";
+      badge.textContent = "ERR · GLSL SYNTAX";
+      badge.style.color = "#ff5722";
     }
   }
 
   buildCurrentEffectObject(glslOverride = null) {
-    const emoji = document.getElementById("effEmoji").value.trim() || "🧪";
+    const emoji = document.getElementById("effEmoji").value.trim() || "USR-01";
     const name = document.getElementById("effName").value.trim() || "Custom FX";
     const sub = document.getElementById("effSub").value.trim() || "FX Lab";
     const glsl = glslOverride || document.getElementById("glslEditor").value;
@@ -296,7 +296,7 @@ return col;`;
 
     const toast = document.getElementById("deployToast");
     if (toast) {
-      toast.textContent = `✅ Ефект "${effect.emoji} ${effect.name}" залито на Пульт та в APK (Кімната ${this.sync.roomId})!`;
+      toast.textContent = `[DEPLOYED] "${effect.emoji} · ${effect.name}" -> REMOTE & APK (ROOM ${this.sync.roomId})`;
       setTimeout(() => {
         toast.textContent = "";
       }, 5000);
@@ -345,11 +345,11 @@ return col;`;
     this.nodeCtx = this.nodeCanvas.getContext("2d");
 
     this.nodes = [
-      { id: "chop", title: "AUDIO CHOP", sub: "SUB / BASS / MID", x: 0.14, y: 0.32, color: "#ff2a85" },
-      { id: "lfo", title: "LFO & XY CHOP", sub: "128 BPM Phase", x: 0.14, y: 0.72, color: "#fee440" },
-      { id: "gen", title: "GENERATOR TOP", sub: "GLSL Shader Core", x: 0.46, y: 0.5, color: "#00f5d4" },
-      { id: "fx", title: "FILMORA FX TOP", sub: "RGB / Kaleido / CV", x: 0.73, y: 0.5, color: "#9b5de5" },
-      { id: "out", title: "PROJECTOR APK", sub: "Live Cloud Out", x: 0.92, y: 0.5, color: "#00f5d4" },
+      { id: "chop", title: "AUDIO CHOP", sub: "SUB / BASS / MID", x: 0.14, y: 0.32, color: "#ff5722" },
+      { id: "lfo", title: "LFO & XY CHOP", sub: "128 BPM Phase", x: 0.14, y: 0.72, color: "#a1a1aa" },
+      { id: "gen", title: "GENERATOR TOP", sub: "GLSL Shader Core", x: 0.46, y: 0.5, color: "#f4f4f6" },
+      { id: "fx", title: "FILMORA FX TOP", sub: "RGB / Kaleido / CV", x: 0.73, y: 0.5, color: "#e4e4e7" },
+      { id: "out", title: "PROJECTOR APK", sub: "Live Cloud Out", x: 0.91, y: 0.5, color: "#10b981" },
     ];
 
     this.draggingNode = null;
@@ -420,8 +420,8 @@ return col;`;
       const x2 = b.x * w;
       const y2 = b.y * h;
 
-      ctx.strokeStyle = a.color;
-      ctx.lineWidth = (2.2 + (dspState.subBass || 0) * 3.0) * (dpr * 0.7);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
+      ctx.lineWidth = (1.5 + (dspState.subBass || 0) * 1.8) * (dpr * 0.7);
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.bezierCurveTo((x1 + x2) * 0.5, y1, (x1 + x2) * 0.5, y2, x2, y2);
@@ -431,17 +431,17 @@ return col;`;
       const t = (now * 0.0012) % 1;
       const px = x1 + (x2 - x1) * t;
       const py = y1 + (y2 - y1) * t;
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = "#ff5722";
       ctx.beginPath();
-      ctx.arc(px, py, 3.5 * dpr, 0, Math.PI * 2);
+      ctx.arc(px, py, 2.8 * dpr, 0, Math.PI * 2);
       ctx.fill();
     });
 
     // Блоки нодів
     const boxW = Math.max(82, w * 0.17);
     const boxH = Math.max(40, h * 0.22);
-    const fontTitle = Math.max(9, Math.round(boxW * 0.1));
-    const fontSub = Math.max(8, Math.round(boxW * 0.085));
+    const fontTitle = Math.max(9, Math.round(boxW * 0.095));
+    const fontSub = Math.max(8, Math.round(boxW * 0.08));
 
     this.nodes.forEach((n) => {
       const cx = n.x * w;
@@ -449,20 +449,24 @@ return col;`;
       const x0 = cx - boxW * 0.5;
       const y0 = cy - boxH * 0.5;
 
-      ctx.fillStyle = "rgba(14, 17, 29, 0.92)";
-      ctx.strokeStyle = n.color;
-      ctx.lineWidth = 1.8 * dpr;
+      ctx.fillStyle = "rgba(15, 16, 20, 0.94)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+      ctx.lineWidth = 1.2 * dpr;
       ctx.beginPath();
-      ctx.roundRect(x0, y0, boxW, boxH, 8 * dpr);
+      ctx.roundRect(x0, y0, boxW, boxH, 6 * dpr);
       ctx.fill();
       ctx.stroke();
 
+      // Кольоровий індикатор порту зліва
       ctx.fillStyle = n.color;
-      ctx.font = `800 ${fontTitle}px -apple-system, sans-serif`;
+      ctx.fillRect(x0, y0 + 6 * dpr, 2.5 * dpr, boxH - 12 * dpr);
+
+      ctx.fillStyle = "#f4f4f6";
+      ctx.font = `700 ${fontTitle}px "SF Mono", "JetBrains Mono", monospace`;
       ctx.fillText(n.title, x0 + 8 * dpr, y0 + boxH * 0.45);
 
-      ctx.fillStyle = "#9ca3c7";
-      ctx.font = `600 ${fontSub}px -apple-system, sans-serif`;
+      ctx.fillStyle = "#8e8e98";
+      ctx.font = `500 ${fontSub}px -apple-system, sans-serif`;
       ctx.fillText(n.sub, x0 + 8 * dpr, y0 + boxH * 0.78);
     });
   }
@@ -471,7 +475,7 @@ return col;`;
     if (msg && msg.type === "syncStatus") {
       const pill = document.getElementById("studioRoomPill");
       if (pill) {
-        pill.textContent = `🔗 Кімната: ${msg.roomId} ${msg.connected ? "🟢" : ""}`;
+        pill.textContent = `ROOM: ${msg.roomId}${msg.connected ? " · ONLINE" : ""}`;
       }
     }
   }

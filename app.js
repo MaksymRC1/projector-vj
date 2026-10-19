@@ -328,7 +328,7 @@ class AuraVJApp {
     this.userPresets.forEach((preset, idx) => {
       const btn = document.createElement("button");
       btn.className = "fx-chip";
-      btn.textContent = `⭐ ${preset.name}`;
+      btn.textContent = `[USR] ${preset.name}`;
       btn.addEventListener("click", () => {
         if (preset.mode) {
           this.visualizer.setMode(preset.mode);
@@ -788,7 +788,10 @@ class AuraVJApp {
         grid.appendChild(pad);
       }
       pad.innerHTML = `
-        <span class="pad-emoji">${effect.emoji || "🧪"}</span>
+        <div class="pad-top-row">
+          <svg class="ico" viewBox="0 0 24 24"><polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9 12 2"/></svg>
+          <span class="pad-code">${effect.emoji || "USR-FX"}</span>
+        </div>
         <span class="pad-name">${effect.name || "Custom FX"}</span>
         <span class="pad-sub">${effect.sub || "FX Studio"}</span>
       `;
@@ -816,7 +819,7 @@ class AuraVJApp {
         else dock.appendChild(dockBtn);
       }
       dockBtn.innerHTML = `
-        <span class="dock-icon">${effect.emoji || "🧪"}</span>
+        <svg class="ico" viewBox="0 0 24 24"><polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9 12 2"/></svg>
         <span class="dock-label">${effect.name || "Custom FX"}</span>
       `;
     }

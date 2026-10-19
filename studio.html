@@ -6,13 +6,13 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <title>AURA FX LAB — Студія Генерації Ефектів (TouchDesigner & Filmora)</title>
+    <title>AURA FX LAB — Pro Node & Shader Studio</title>
     <link rel="stylesheet" href="style.css" />
     <style>
       body.studio-body {
         overflow-y: auto;
         height: 100dvh;
-        background: #06070c;
+        background: var(--bg-obsidian);
       }
 
       .studio-layout {
@@ -42,11 +42,11 @@
         position: relative;
         height: 270px;
         min-height: 220px;
-        border-radius: 16px;
+        border-radius: 12px;
         overflow: hidden;
-        border: 1px solid rgba(0, 245, 212, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.14);
         background: #000;
-        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.7);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
       }
 
       .preview-card canvas {
@@ -60,12 +60,14 @@
         top: 10px;
         left: 12px;
         padding: 4px 10px;
-        border-radius: 999px;
-        background: rgba(0, 0, 0, 0.7);
-        border: 1px solid rgba(0, 245, 212, 0.4);
-        font-size: 0.68rem;
-        font-weight: 700;
-        color: var(--neon-cyan);
+        border-radius: 6px;
+        background: rgba(10, 10, 14, 0.78);
+        border: 1px solid var(--border-hairline);
+        font-family: var(--font-mono);
+        font-size: 0.62rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        backdrop-filter: blur(12px);
         z-index: 10;
       }
 
@@ -74,13 +76,13 @@
         position: relative;
         height: 230px;
         min-height: 200px;
-        border-radius: 16px;
+        border-radius: 12px;
         overflow: hidden;
         background:
-          radial-gradient(circle at center, rgba(22, 28, 48, 0.8), #080910),
-          repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 20px),
-          repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 20px);
-        border: 1px solid rgba(155, 93, 229, 0.4);
+          radial-gradient(circle at center, rgba(255, 255, 255, 0.025), #08080b),
+          repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 20px),
+          repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 20px);
+        border: 1px solid var(--border-hairline);
       }
 
       #nodeGraphCanvas {
@@ -107,30 +109,36 @@
       }
 
       .node-graph-header span {
-        font-size: 0.68rem;
-        font-weight: 700;
-        color: #d8b4fe;
-        background: rgba(8, 9, 16, 0.78);
+        font-family: var(--font-mono);
+        font-size: 0.6rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        color: var(--text-secondary);
+        background: rgba(10, 10, 14, 0.82);
         padding: 3px 8px;
-        border-radius: 6px;
-        border: 1px solid rgba(155, 93, 229, 0.35);
+        border-radius: 5px;
+        border: 1px solid var(--border-hairline);
       }
 
       .builder-section {
-        background: rgba(18, 20, 34, 0.88);
-        border: 1px solid rgba(255, 255, 255, 0.09);
-        border-radius: 14px;
+        background: var(--glass-card);
+        border: 1px solid var(--border-hairline);
+        border-radius: 12px;
         padding: 12px;
         display: flex;
         flex-direction: column;
         gap: 10px;
+        backdrop-filter: blur(20px);
+        box-shadow: var(--specular-top);
       }
 
       .builder-title {
-        font-size: 0.74rem;
-        font-weight: 800;
-        letter-spacing: 0.8px;
-        color: var(--neon-cyan);
+        font-family: var(--font-mono);
+        font-size: 0.64rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        text-transform: uppercase;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -139,7 +147,7 @@
       .template-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 7px;
+        gap: 6px;
       }
 
       @media (max-width: 500px) {
@@ -149,73 +157,99 @@
       }
 
       .tpl-btn {
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 10px;
-        padding: 8px 6px;
-        color: var(--text-main);
+        background: rgba(255, 255, 255, 0.025);
+        border: 1px solid var(--border-hairline);
+        border-radius: 8px;
+        padding: 9px 8px;
+        color: var(--text-secondary);
         font-size: 0.7rem;
-        font-weight: 700;
+        font-weight: 500;
         cursor: pointer;
-        text-align: center;
-        transition: all 0.15s;
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        transition: all 0.14s ease;
+      }
+
+      .tpl-btn small {
+        font-family: var(--font-mono);
+        font-size: 0.54rem;
+        color: var(--text-muted);
+      }
+
+      .tpl-btn:hover {
+        border-color: rgba(255, 255, 255, 0.18);
+        color: var(--text-primary);
       }
 
       .tpl-btn.active {
-        background: rgba(0, 245, 212, 0.2);
-        border-color: var(--neon-cyan);
-        box-shadow: 0 0 14px rgba(0, 245, 212, 0.28);
+        background: var(--glass-active);
+        border-color: var(--border-active);
+        color: var(--text-primary);
+        box-shadow: var(--specular-top);
       }
 
       .meta-inputs-row {
         display: grid;
-        grid-template-columns: 64px 1fr 1fr;
+        grid-template-columns: 76px 1fr 1fr;
         gap: 8px;
       }
 
       .studio-input {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 7px;
         padding: 8px 10px;
-        color: #fff;
-        font-size: 0.8rem;
-        font-weight: 600;
+        color: var(--text-primary);
+        font-family: var(--font-mono);
+        font-size: 0.74rem;
+        font-weight: 500;
         user-select: text;
       }
 
       .glsl-editor {
         width: 100%;
-        min-height: 115px;
-        background: #080a12;
-        color: #7ee787;
-        border: 1px solid rgba(0, 245, 212, 0.28);
-        border-radius: 10px;
+        min-height: 118px;
+        background: #08080b;
+        color: #d4d4d8;
+        border: 1px solid var(--border-hairline);
+        border-radius: 8px;
         padding: 10px;
-        font-family: "SF Mono", "JetBrains Mono", monospace;
-        font-size: 0.72rem;
-        line-height: 1.4;
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        line-height: 1.45;
         resize: vertical;
         user-select: text;
       }
 
       .deploy-btn {
         width: 100%;
-        padding: 13px 16px;
-        border: none;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #00f5d4, #9b5de5, #ff2a85);
-        color: #fff;
-        font-size: 0.9rem;
-        font-weight: 800;
-        letter-spacing: 0.5px;
+        padding: 12px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 8px;
+        background: var(--text-primary);
+        color: #09090b;
+        font-family: var(--font-mono);
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
         cursor: pointer;
-        box-shadow: 0 6px 24px rgba(255, 42, 133, 0.4);
-        transition: transform 0.12s, box-shadow 0.15s;
+        transition: all 0.14s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .deploy-btn:hover {
+        background: #ffffff;
+        box-shadow: 0 8px 24px rgba(255, 255, 255, 0.15);
       }
 
       .deploy-btn:active {
-        transform: scale(0.98);
+        transform: translateY(1px);
       }
 
       .export-row {
@@ -225,23 +259,31 @@
       }
 
       .secondary-btn {
-        padding: 9px 10px;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.06);
-        color: var(--text-main);
-        font-size: 0.72rem;
-        font-weight: 700;
+        padding: 8px 10px;
+        border: 1px solid var(--border-hairline);
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-secondary);
+        font-family: var(--font-mono);
+        font-size: 0.66rem;
+        font-weight: 500;
         cursor: pointer;
         text-align: center;
+        transition: all 0.14s ease;
+      }
+
+      .secondary-btn:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+        color: var(--text-primary);
       }
 
       .status-toast {
-        font-size: 0.74rem;
-        font-weight: 700;
-        color: var(--neon-cyan);
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        font-weight: 500;
+        color: var(--accent-emerald);
         text-align: center;
-        min-height: 18px;
+        min-height: 16px;
       }
     </style>
   </head>
@@ -250,11 +292,15 @@
       <div class="brand-status">
         <span class="pulse-dot" id="studioBeatLed"></span>
         <span class="brand-title">AURA <strong>FX LAB</strong></span>
-        <span class="bpm-pill" id="studioRoomPill">🔗 Кімната: ----</span>
+        <span class="bpm-pill" id="studioRoomPill">ROOM · ----</span>
       </div>
       <div class="view-switcher">
         <a href="index.html" class="view-btn active" id="btnBackToStage" style="text-decoration: none">
-          ⬅️ На Пульт і Проектор
+          <svg class="ico" viewBox="0 0 24 24">
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
+          <span>На Пульт і Проектор</span>
         </a>
       </div>
     </header>
@@ -263,14 +309,14 @@
       <!-- ЛІВА КОЛОНКА: ЖИВИЙ 60 FPS ПРЕВ'Ю-МОНІТОР + TOUCHDESIGNER НОДОВИЙ ГРАФ -->
       <div class="studio-left-col">
         <div class="preview-card">
-          <span class="preview-badge" id="compileStatusBadge">✅ Live 60 FPS GPU Preview</span>
+          <span class="preview-badge" id="compileStatusBadge">GPU SHADER · 60 FPS READY</span>
           <canvas id="studioPreviewCanvas"></canvas>
           <canvas id="studioOverlayCanvas" class="td-overlay-canvas"></canvas>
         </div>
 
         <div class="node-graph-card">
           <div class="node-graph-header">
-            <span>🔌 TOUCHDESIGNER NODE NETWORK (Перетягуйте ноди пальцем/мишкою)</span>
+            <span>TOUCHDESIGNER NODE GRAPH · DRAG NODES</span>
             <span id="activeNodeLabel">TOP: Voronoi Matrix</span>
           </div>
           <canvas id="nodeGraphCanvas"></canvas>
@@ -279,16 +325,16 @@
         <!-- Заливка на Пульт та в APK -->
         <div class="builder-section">
           <div class="builder-title">
-            <span>🚀 ПУБЛІКАЦІЯ ЕФЕКТУ НА ПУЛЬТ ТА ПРОЕКТОР (APK)</span>
+            <span>DEPLOY TO REMOTE & PROJECTOR APK</span>
           </div>
           <div class="meta-inputs-row">
             <input
               type="text"
               class="studio-input"
               id="effEmoji"
-              value="💎"
-              maxlength="4"
-              title="Іконка ефекту"
+              value="USR-01"
+              maxlength="6"
+              title="Код ефекту на пульті"
               style="text-align: center"
             />
             <input
@@ -303,23 +349,27 @@
               type="text"
               class="studio-input"
               id="effSub"
-              value="Клітинний неон"
+              value="Cellular Matrix"
               maxlength="20"
               placeholder="Підпис"
             />
           </div>
 
           <button class="deploy-btn" id="btnPushToRemoteAndApk">
-            🚀 ЗАЛИТИ НА ПУЛЬТ І В APK ПРОЕКТОРА
+            <svg class="ico" viewBox="0 0 24 24">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+            <span>ЗАЛИТИ НА ПУЛЬТ І В APK ПРОЕКТОРА</span>
           </button>
           <div class="status-toast" id="deployToast"></div>
 
           <div class="export-row">
             <button class="secondary-btn" id="btnExportJson">
-              📥 Завантажити .aurafx файл
+              EXPORT .AURAFX PATCH
             </button>
             <button class="secondary-btn" id="btnImportJson">
-              📤 Імпортувати .aurafx файл
+              IMPORT .AURAFX PATCH
             </button>
             <input type="file" id="importFxInput" accept=".aurafx,.json" hidden />
           </div>
@@ -330,33 +380,39 @@
       <div class="studio-right-col">
         <div class="builder-section">
           <div class="builder-title">
-            <span>1. БАЗОВИЙ ГЕНЕРАТОР (TOUCHDESIGNER GENERATOR TOP)</span>
+            <span>01 · GENERATOR TOP (TOUCHDESIGNER CORE)</span>
           </div>
           <div class="template-grid" id="templateGrid">
             <button class="tpl-btn active" data-tpl="voronoi">
-              🧬 Voronoi Клітини
+              <small>GEN-01</small>
+              <span>Voronoi Matrix</span>
             </button>
             <button class="tpl-btn" data-tpl="octahedron">
-              💎 3D Кібер-Октаедр
+              <small>GEN-02</small>
+              <span>3D Octahedron</span>
             </button>
             <button class="tpl-btn" data-tpl="matrix">
-              🟢 Матриця & Хвиля
+              <small>GEN-03</small>
+              <span>Oscilloscope</span>
             </button>
             <button class="tpl-btn" data-tpl="vortex">
-              🌀 Гіпно-Спіраль
+              <small>GEN-04</small>
+              <span>Spiral Vortex</span>
             </button>
             <button class="tpl-btn" data-tpl="tesla">
-              ⚡ Блискавки Тесли
+              <small>GEN-05</small>
+              <span>Tesla Arcs</span>
             </button>
             <button class="tpl-btn" data-tpl="lasers_custom">
-              🎆 Лазерний Приціл
+              <small>GEN-06</small>
+              <span>Galvo Crosshair</span>
             </button>
           </div>
 
           <div class="fx-sliders-grid" style="margin-top: 4px">
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>📐 Щільність / Масштаб геометрії</span>
+                <span>Geometry Scale / Density</span>
                 <strong id="lbl_paramScale">50%</strong>
               </div>
               <input type="range" id="paramScale" min="10" max="100" value="50" />
@@ -364,7 +420,7 @@
 
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>⚡ Чутливість до Басу (Audio React)</span>
+                <span>Audio Bass Reactivity</span>
                 <strong id="lbl_paramAudio">75%</strong>
               </div>
               <input type="range" id="paramAudio" min="0" max="100" value="75" />
@@ -372,7 +428,7 @@
 
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>✨ Яскравість неонового світіння (Bloom)</span>
+                <span>Specular Bloom Intensity</span>
                 <strong id="lbl_paramGlow">65%</strong>
               </div>
               <input type="range" id="paramGlow" min="10" max="100" value="65" />
@@ -380,7 +436,7 @@
 
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>🎨 Зсув неонової палітри</span>
+                <span>Harmonic Color Phase</span>
                 <strong id="lbl_paramPalette">20%</strong>
               </div>
               <input type="range" id="paramPalette" min="0" max="100" value="20" />
@@ -391,17 +447,17 @@
         <!-- Стек Filmora FX + TD CHOP для цього ефекту -->
         <div class="builder-section">
           <div class="builder-title">
-            <span>2. ШАРИ ПОСТ-ОБРОБКИ (FILMORA FX + TD BLOB CV)</span>
+            <span>02 · POST-FX MODIFIERS & CV TRACKING</span>
             <label class="toggle-pill">
               <input type="checkbox" id="studioBlobHud" />
-              <span>👁️ TD Рамки</span>
+              <span>TD CV OVERLAY</span>
             </label>
           </div>
 
           <div class="fx-sliders-grid">
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>🌈 RGB Split (на SUB-бас)</span>
+                <span>RGB Chromatic Split</span>
                 <strong id="sval_rgbSplit">25%</strong>
               </div>
               <input type="range" class="studio-fx-range" data-fx="rgbSplit" min="0" max="100" value="25" />
@@ -409,7 +465,7 @@
 
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>🔮 Калейдоскоп (Дзеркала)</span>
+                <span>Mirror Kaleidoscope</span>
                 <strong id="sval_kaleido">0%</strong>
               </div>
               <input type="range" class="studio-fx-range" data-fx="kaleido" min="0" max="100" value="0" />
@@ -417,7 +473,7 @@
 
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>🌊 Feedback Warp (Шлейф)</span>
+                <span>Curl Feedback Warp</span>
                 <strong id="sval_feedback">20%</strong>
               </div>
               <input type="range" class="studio-fx-range" data-fx="feedback" min="0" max="100" value="20" />
@@ -425,7 +481,7 @@
 
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>⚡ Neon Edges (Контури)</span>
+                <span>Sobel Edge Contour</span>
                 <strong id="sval_edges">0%</strong>
               </div>
               <input type="range" class="studio-fx-range" data-fx="edges" min="0" max="100" value="0" />
@@ -433,7 +489,7 @@
 
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>📼 VHS & Cyber Glitch</span>
+                <span>VHS Slice Glitch</span>
                 <strong id="sval_glitch">0%</strong>
               </div>
               <input type="range" class="studio-fx-range" data-fx="glitch" min="0" max="100" value="0" />
@@ -441,7 +497,7 @@
 
             <div class="fx-slider-row">
               <div class="fx-slider-label">
-                <span>🟩 LED Matrix (Пікселі)</span>
+                <span>Halftone LED Matrix</span>
                 <strong id="sval_pixelate">0%</strong>
               </div>
               <input type="range" class="studio-fx-range" data-fx="pixelate" min="0" max="100" value="0" />
@@ -452,8 +508,8 @@
         <!-- Живий редактор коду шейдера GLSL (TouchDesigner GLSL TOP) -->
         <div class="builder-section">
           <div class="builder-title">
-            <span>3. ЖИВИЙ GLSL ШЕЙДЕР-КОД (TOUCHDESIGNER GLSL TOP)</span>
-            <button class="mini-action-btn" id="btnCompileGlsl">▶️ Компілювати</button>
+            <span>03 · GLSL FRAGMENT SHADER SOURCE</span>
+            <button class="mini-action-btn" id="btnCompileGlsl">COMPILE GLSL</button>
           </div>
           <textarea class="glsl-editor" id="glslEditor" spellcheck="false"></textarea>
         </div>

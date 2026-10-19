@@ -924,8 +924,8 @@ class ShaderVisualizer {
         const dist = Math.hypot(a.px - b.px, a.py - b.py);
         const maxDist = Math.min(w, h) * 0.48;
         if (dist < maxDist) {
-          const alpha = (1.0 - dist / maxDist) * 0.65;
-          ctx.strokeStyle = `rgba(0, 245, 212, ${alpha.toFixed(2)})`;
+          const alpha = (1.0 - dist / maxDist) * 0.55;
+          ctx.strokeStyle = `rgba(244, 244, 246, ${alpha.toFixed(2)})`;
           ctx.beginPath();
           ctx.moveTo(a.px, a.py);
           // Крива Безьє як у TouchDesigner CHOP trail
@@ -938,23 +938,24 @@ class ShaderVisualizer {
     }
 
     // 2. Рамки комп'ютерного зору (Bounding Boxes + Crosshairs + Координати)
-    const fontSize = Math.max(10, Math.round(w * 0.013));
-    ctx.font = `700 ${fontSize}px "SF Mono", "JetBrains Mono", monospace`;
+    const fontSize = Math.max(10, Math.round(w * 0.012));
+    ctx.font = `600 ${fontSize}px "SF Mono", "JetBrains Mono", monospace`;
 
     this.trackedBlobs.forEach((b, idx) => {
       const half = b.currentSize * 0.5;
       const x0 = b.px - half;
       const y0 = b.py - half;
       const isKick = idx % 2 === 0 && dspState.beatIntensity > 0.45;
-      const color = isKick ? "#ff2a85" : "#00f5d4";
+      const color = isKick ? "#ff5722" : "rgba(244, 244, 246, 0.85)";
 
-      ctx.strokeStyle = color;
-      ctx.lineWidth = isKick ? 2.2 : 1.4;
+      ctx.strokeStyle = "rgba(244, 244, 246, 0.28)";
+      ctx.lineWidth = 1;
       ctx.strokeRect(x0, y0, b.currentSize, b.currentSize);
 
       // Кутові акценти рамки
       const corner = Math.max(6, b.currentSize * 0.18);
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(x0, y0 + corner);
       ctx.lineTo(x0, y0);
@@ -967,15 +968,15 @@ class ShaderVisualizer {
       // Приціл у центрі
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(b.px - 5, b.py);
-      ctx.lineTo(b.px + 5, b.py);
-      ctx.moveTo(b.px, b.py - 5);
-      ctx.lineTo(b.px, b.py + 5);
+      ctx.moveTo(b.px - 4, b.py);
+      ctx.lineTo(b.px + 4, b.py);
+      ctx.moveTo(b.px, b.py - 4);
+      ctx.lineTo(b.px, b.py + 4);
       ctx.stroke();
 
       // Підпис ID та живих координат [x, y, amp]
       const label = `${b.id} [${b.x.toFixed(2)}, ${b.y.toFixed(2)}] ${(b.val * 100).toFixed(0)}%`;
-      ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+      ctx.fillStyle = "rgba(7, 7, 9, 0.82)";
       ctx.fillRect(x0, y0 - fontSize - 6, ctx.measureText(label).width + 8, fontSize + 5);
       ctx.fillStyle = color;
       ctx.fillText(label, x0 + 4, y0 - 4);
