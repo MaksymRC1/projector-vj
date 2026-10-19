@@ -62,9 +62,42 @@ class DSPEngine {
     // Чутливість та підсилювач мікрофона (для захоплення звуку в приміщенні)
     this.micSensitivity = 2.5;
     this.micGainNode = null;
+    this._startCallId = 0;
+    this.lastRemoteUpdateFrame = performance.now();
+  }
+
+  /**
+   * Зупинка локальних генераторів звуку при переході проектора в режим прийому телеметрії з пульта
+   */
+  stopLocalGenerators() {
+    if (this.synthTimer) {
+      clearInterval(this.synthTimer);
+      this.synthTimer = null;
+    }
+    if (this.audioElement) {
+      try {
+        this.audioElement.pause();
+      } catch {}
+      this.audioElement = null;
+    }
+    if (this.mediaStream) {
+      try {
+        this.mediaStream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      this.mediaStream = null;
+    }
+    if (this.ctx && this.ctx.state !== "closed") {
+      try {
+        this.ctx.close().catch(() => {});
+      } catch {}
+      this.ctx = null;
+    }
+    this.analyser = null;
+    this.micGainNode = null;
   }
 
   async start(sourceType = "synth", file = null) {
+    const callId = ++this._startCallId;
     this.stop();
     this.activeSource = sourceType;
 
@@ -79,22 +112,33 @@ class DSPEngine {
         this.isRunning = true;
         this.lastBeatTime = performance.now();
         return { source: "native_android" };
+      } else if (navigator.mediaDevices?.getDisplayMedia) {
+        // На ПК/Mac кнопка YT Music відкриває захоплення системного звуку вкладки браузера (YouTube / Spotify)
+        sourceType = "screen";
+        this.activeSource = "screen";
       } else {
         throw new Error(
-          "Системне захоплення YouTube Music (Visualizer API) працює у встановленому Android APK додатку на проекторі"
+          "На смартфоні використовуйте Mic Sensor для живого захоплення звуку з колонок"
         );
       }
     }
 
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    this.ctx = new AudioCtx();
-    if (this.ctx.state === "suspended") {
-      await this.ctx.resume();
+    const ctx = new AudioCtx();
+    this.ctx = ctx;
+    if (ctx.state === "suspended") {
+      await ctx.resume();
+    }
+    if (this._startCallId !== callId) {
+      try {
+        ctx.close().catch(() => {});
+      } catch {}
+      return { aborted: true };
     }
 
-    this.analyser = this.ctx.createAnalyser();
+    this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = this.fftSize;
-    this.analyser.smoothingTimeConstant = 0.45; // Низьке інерційне згладжування для чітких транзієнтів
+    this.analyser.smoothingTimeConstant = 0.42; // Чітка реакція на транзієнти та удари бочки
     this.freqData = new Uint8Array(this.analyser.frequencyBinCount);
     this.prevFreqData = new Float32Array(this.analyser.frequencyBinCount);
     this.waveData = new Uint8Array(this.analyser.frequencyBinCount);
@@ -112,35 +156,42 @@ class DSPEngine {
       } catch {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
+
+      // Якщо під час очікування дозволу на мікрофон був інший виклик start() — чисто закриваємо дубль
+      if (this._startCallId !== callId || !this.ctx || this.ctx !== ctx) {
+        if (stream) stream.getTracks().forEach((t) => t.stop());
+        return { aborted: true };
+      }
+
       this.mediaStream = stream;
 
       // Підсилювач чутливості мікрофона
-      this.micGainNode = this.ctx.createGain();
+      this.micGainNode = ctx.createGain();
       this.micGainNode.gain.value = this.micSensitivity || 2.5;
 
-      this.sourceNode = this.ctx.createMediaStreamSource(this.mediaStream);
+      this.sourceNode = ctx.createMediaStreamSource(this.mediaStream);
       this.sourceNode.connect(this.micGainNode);
       this.micGainNode.connect(this.analyser);
 
-      // КРИТИЧНО ДЛЯ iOS SAFARI: WebKit не качає аудіо-семпли в AnalyserNode,
-      // якщо немає зв'язку з ctx.destination! Підключаємо через нульовий Gain:
-      const zeroGain = this.ctx.createGain();
+      // КРИТИЧНО ДЛЯ iOS SAFARI: WebKit не прокачує аудіо-семпли в AnalyserNode,
+      // якщо граф не з'єднаний із ctx.destination. Підключаємо через тихий Gain (0.0):
+      const zeroGain = ctx.createGain();
       zeroGain.gain.value = 0.0;
       this.analyser.connect(zeroGain);
-      zeroGain.connect(this.ctx.destination);
+      zeroGain.connect(ctx.destination);
 
-      if (this.ctx.state === "suspended") {
-        await this.ctx.resume();
+      if (ctx.state === "suspended") {
+        await ctx.resume();
       }
 
-      // Калібрування AGC спеціально під мікрофон смартфона
-      this.agcPeak = 45;
-      this.agcNoiseFloor = 4;
+      // Калібрування AGC спеціально під мікрофон
+      this.agcPeak = 42;
+      this.agcNoiseFloor = 3.5;
     } else if (sourceType === "screen") {
       if (!navigator.mediaDevices?.getDisplayMedia) {
-        throw new Error("Захоплення екрана не підтримується в цьому браузері");
+        throw new Error("Захоплення звуку вкладки не підтримується в цьому браузері");
       }
-      this.mediaStream = await navigator.mediaDevices.getDisplayMedia({
+      const stream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: {
           echoCancellation: false,
@@ -149,21 +200,40 @@ class DSPEngine {
         },
         systemAudio: "include",
       });
+      if (this._startCallId !== callId || !this.ctx || this.ctx !== ctx) {
+        if (stream) stream.getTracks().forEach((t) => t.stop());
+        return { aborted: true };
+      }
+      this.mediaStream = stream;
       const audioTracks = this.mediaStream.getAudioTracks();
       if (audioTracks.length === 0) {
-        throw new Error("Не вибрано галочку «Надати доступ до аудіо вкладки»");
+        this.mediaStream.getTracks().forEach((t) => t.stop());
+        this.mediaStream = null;
+        throw new Error("У вікні вибору вкладки увімкніть тумблер «Надати доступ до аудіо вкладки»");
       }
-      this.sourceNode = this.ctx.createMediaStreamSource(this.mediaStream);
+      // Відео-трек не потрібен для аудіо-аналізу, зупиняємо його для економії ресурсів
+      this.mediaStream.getVideoTracks().forEach((vt) => vt.stop());
+
+      this.sourceNode = ctx.createMediaStreamSource(this.mediaStream);
       this.sourceNode.connect(this.analyser);
+      const zeroGain = ctx.createGain();
+      zeroGain.gain.value = 0.0;
+      this.analyser.connect(zeroGain);
+      zeroGain.connect(ctx.destination);
     } else if (sourceType === "file" && file) {
       const url = URL.createObjectURL(file);
-      this.audioElement = new Audio(url);
-      this.audioElement.loop = true;
-      this.audioElement.crossOrigin = "anonymous";
-      await this.audioElement.play();
-      this.sourceNode = this.ctx.createMediaElementSource(this.audioElement);
+      const audioEl = new Audio(url);
+      audioEl.loop = true;
+      audioEl.crossOrigin = "anonymous";
+      await audioEl.play();
+      if (this._startCallId !== callId || !this.ctx || this.ctx !== ctx) {
+        audioEl.pause();
+        return { aborted: true };
+      }
+      this.audioElement = audioEl;
+      this.sourceNode = ctx.createMediaElementSource(this.audioElement);
       this.sourceNode.connect(this.analyser);
-      this.analyser.connect(this.ctx.destination);
+      this.analyser.connect(ctx.destination);
     } else {
       // Вбудований Web Audio генератор клубного біту (128 BPM)
       this.startBuiltInSynth();
@@ -175,12 +245,12 @@ class DSPEngine {
   }
 
   /**
-   * Вбудований процедурний синтезатор (Kick + Acid Bass + Hi-Hat + Clap)
-   * Дозволяє одразу почути та побачити ідеальну синхронізацію зі смартфона!
+   * Вбудований процедурний синтезатор (Kick + Acid Bass + Hi-Hat + Clap),
+   * синхронізований за глобальним часом Date.now()
    */
   startBuiltInSynth() {
     const masterGain = this.ctx.createGain();
-    masterGain.gain.value = this.synthMuted ? 0.001 : 0.55;
+    masterGain.gain.value = this.synthMuted ? 0.0001 : 0.55;
     this.synthGainNode = masterGain;
 
     // Підключаємо в аналізатор ДО регулятора звуку, щоб навіть у Mute візуалізація працювала
@@ -190,15 +260,16 @@ class DSPEngine {
     analyserHub.connect(masterGain);
     masterGain.connect(this.ctx.destination);
 
-    const stepDurationMs = (60 / 128 / 4) * 1000; // 16-ті ноти при 128 BPM (~117ms)
-    this.synthStep = 0;
+    const stepDurationMs = (60 / 128 / 4) * 1000; // 16-ті ноти при 128 BPM (117.1875ms)
+    this.synthStep = Math.floor(Date.now() / stepDurationMs);
 
     const bassNotes = [55, 55, 110, 55, 65.41, 55, 82.41, 73.42];
 
     const triggerStep = () => {
       if (!this.ctx || this.ctx.state !== "running") return;
       const now = this.ctx.currentTime;
-      const step = this.synthStep % 16;
+      const globalStep = Math.floor(Date.now() / stepDurationMs);
+      const step = globalStep % 16;
 
       // 1. Punchy 909 Kick на кожен 0, 4, 8, 12 крок
       if (step % 4 === 0) {
@@ -293,7 +364,7 @@ class DSPEngine {
         osc.stop(now + 0.12);
       }
 
-      this.synthStep++;
+      this.synthStep = globalStep + 1;
     };
 
     triggerStep();
@@ -319,15 +390,27 @@ class DSPEngine {
   }
 
   /**
-   * Прийом аудіо-телеметрії з пульта смартфона (компактний масив або об'єкт)
+   * Прийом аудіо-телеметрії з пульта (компактний масив або об'єкт)
+   * Автоматично вимикає локальний синтезатор на проекторі, щоб усунути розсинхрон звуку!
    */
   ingestRemoteTelemetry(packet) {
     if (!packet) return;
+
+    // Якщо на проекторі грав локальний синтезатор — миттєво глушимо та зупиняємо його!
+    if (this.synthTimer || this.ctx || this.audioElement) {
+      this.stopLocalGenerators();
+    }
+
     this.lastRemoteTelemetryTime = performance.now();
     this.activeSource = "remote";
     this.isRunning = true;
 
+    let incomingBeatCount = null;
+    let remoteTime = null;
+
     if (Array.isArray(packet)) {
+      incomingBeatCount = typeof packet[8] === "number" ? packet[8] : null;
+      remoteTime = typeof packet[9] === "number" ? packet[9] : null;
       this.targetRemote = {
         subBass: packet[0] || 0,
         bass: packet[1] || 0,
@@ -337,8 +420,11 @@ class DSPEngine {
         bpm: packet[5] || 128,
         beatPhase: packet[6] || 0,
         isBeat: !!packet[7],
+        remoteTime,
       };
     } else {
+      incomingBeatCount = typeof packet.beatCount === "number" ? packet.beatCount : null;
+      remoteTime = typeof packet.remoteTime === "number" ? packet.remoteTime : null;
       this.targetRemote = {
         subBass: packet.subBass || 0,
         bass: packet.bass || 0,
@@ -348,13 +434,20 @@ class DSPEngine {
         bpm: packet.bpm || 128,
         beatPhase: packet.beatPhase || 0,
         isBeat: !!packet.isBeat,
+        remoteTime,
       };
     }
 
-    if (this.targetRemote.isBeat) {
-      this.beatCount++;
+    const beatAdvanced =
+      incomingBeatCount !== null && incomingBeatCount > this.beatCount;
+
+    if (this.targetRemote.isBeat || beatAdvanced) {
+      this.beatCount = incomingBeatCount !== null ? incomingBeatCount : this.beatCount + 1;
       this.isBeat = true;
       this.beatIntensity = 1.0;
+      this.targetRemote.beatIntensity = 1.0;
+    } else if (incomingBeatCount !== null) {
+      this.beatCount = incomingBeatCount;
     }
   }
 
@@ -374,30 +467,39 @@ class DSPEngine {
    * Головний цикл DSP-обробки на кожному кадрі (60-120 FPS)
    */
   update(now = performance.now()) {
-    // 1. Якщо джерело — віддалений смартфон (P2P або Хмара): 60 FPS плавна інтерполяція (lerp)
+    // 1. Якщо джерело — віддалений пульт (P2P / BroadcastChannel / Хмара): 60 FPS асиметрична інтерполяція
     if (this.activeSource === "remote" && this.targetRemote) {
-      if (now - this.lastRemoteTelemetryTime > 2500) {
+      const dt = Math.min(0.1, Math.max(0.001, (now - this.lastRemoteUpdateFrame) / 1000));
+      this.lastRemoteUpdateFrame = now;
+
+      if (now - this.lastRemoteTelemetryTime > 3000) {
         return this.getEmptyState();
       }
 
-      // Плавне підтягування значень між мережевими пакетами
-      const lerp = 0.45;
-      this.envelopes.subBass += (this.targetRemote.subBass - this.envelopes.subBass) * lerp;
-      this.envelopes.bass += (this.targetRemote.bass - this.envelopes.bass) * lerp;
-      this.envelopes.mid += (this.targetRemote.mid - this.envelopes.mid) * lerp;
-      this.envelopes.high += (this.targetRemote.high - this.envelopes.high) * lerp;
+      // Швидка атака (0.82) для миттєвої реакції на бочку та плавний спад (0.34)
+      const follow = (curr, target) =>
+        target > curr ? curr + (target - curr) * 0.82 : curr + (target - curr) * 0.34;
+
+      this.envelopes.subBass = follow(this.envelopes.subBass, this.targetRemote.subBass);
+      this.envelopes.bass = follow(this.envelopes.bass, this.targetRemote.bass);
+      this.envelopes.mid = follow(this.envelopes.mid, this.targetRemote.mid);
+      this.envelopes.high = follow(this.envelopes.high, this.targetRemote.high);
+
       this.beatIntensity = Math.max(
         this.beatIntensity * 0.86,
         this.targetRemote.beatIntensity
       );
       this.targetRemote.beatIntensity *= 0.86;
 
+      // Плавне просування beatPhase у 60 FPS між мережевими пакетами
+      const bps = (this.targetRemote.bpm || 128) / 60;
+      this.targetRemote.beatPhase = (this.targetRemote.beatPhase + dt * bps) % 1.0;
+
       const energy =
-        (this.envelopes.subBass +
-          this.envelopes.bass +
-          this.envelopes.mid +
-          this.envelopes.high) /
-        4;
+        this.envelopes.subBass * 0.45 +
+        this.envelopes.bass * 0.25 +
+        this.envelopes.mid * 0.2 +
+        this.envelopes.high * 0.1;
 
       const hitBeat = this.isBeat;
       this.isBeat = false; // Скидаємо удар після 1 кадру рендеру
@@ -413,6 +515,7 @@ class DSPEngine {
         beatCount: this.beatCount,
         bpm: this.targetRemote.bpm,
         beatPhase: this.targetRemote.beatPhase,
+        remoteTime: this.targetRemote.remoteTime,
         freqData: this.freqData,
         waveData: this.waveData,
       };

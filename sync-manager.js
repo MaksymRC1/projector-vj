@@ -1,60 +1,81 @@
 /**
- * Universal Real-Time Sync Manager (iPhone iOS <-> Android Проектор)
- * Працює одночасно через 3 канали:
- * 1. Cloud Room Sync (MQTT over WSS через публічний брокер EMQX) — працює між iPhone на 4G/5G та Проектором на Wi-Fi за 4-значним кодом кімнати!
- * 2. LAN WebSocket (коли запущено локальний server.js)
- * 3. BroadcastChannel API (між вкладками одного пристрою)
+ * Universal Real-Time Sync Manager (iPhone iOS / Mac / PC <-> Android Проектор / Smart TV)
+ * Працює одночасно через 4 синхронні канали з дедуплікацією за seq-номером:
+ * 1. BroadcastChannel API (0ms між вкладками/вікнами одного комп'ютера)
+ * 2. WebRTC P2P DataChannel (1-15ms прямий UDP-канал між пристроями)
+ * 3. LAN WebSocket (1-5ms локальний сервер)
+ * 4. Multi-Broker Cloud MQTT Mesh (паралельне з'єднання з EMQX + HiveMQ без split-brain)
  */
 class SyncManager {
   constructor(onMessageCallback) {
     this.onMessage = onMessageCallback;
     this.clientId = "aura_" + Math.random().toString(36).substring(2, 8);
-    this.roomId = this.initRoomId();
+    this.msgSeq = 0;
+    this.seenControlKeys = new Set();
+    this.lastTelemetrySeqBySender = new Map();
 
+    // Акумулятори піків телеметрії між мережевими пакетами (щоб жоден удар бочки не губився)
+    this.p2pPeak = null;
+    this.mqttPeak = null;
+    this.lastTelemetrySentP2P = 0;
+    this.lastTelemetrySentMqtt = 0;
+
+    this.roomId = this.initRoomId();
+    this.mqttPacketId = 1;
+
+    // 1. Локальний міжвкладковий канал (0ms)
     this.bc =
       typeof BroadcastChannel !== "undefined"
         ? new BroadcastChannel("vj_projector_sync_v2")
         : null;
-    this.lanWs = null;
-    this.cloudWs = null;
-    this.pingInterval = null;
-    this.connectTimeout = null;
-    this.cloudConnected = false;
-    this.lastTelemetrySentMqtt = 0;
-    this.lastTelemetrySentP2P = 0;
 
-    // WebRTC Peer-to-Peer DataChannel (пряме UDP-з'єднання 1-15ms без посередників)
+    // 2. WebRTC Peer-to-Peer DataChannel (1-15ms UDP)
     this.pc = null;
     this.webrtcChannel = null;
     this.p2pConnected = false;
+    this.rtcWatchdog = null;
     this.iceCandidateQueue = [];
 
-    // Список надійних WSS MQTT-брокерів з автоматичним перемиканням (Multi-Broker Failover)
+    // 3. Локальний WebSocket
+    this.lanWs = null;
+
+    // 4. Паралельний пул хмарних MQTT-брокерів (унеможливлює підключення пульта і проектора до різних серверів)
     this.brokers = [
       "wss://broker.emqx.io:8084/mqtt",
       "wss://broker.hivemq.com:8884/mqtt",
       "wss://test.mosquitto.org:8081/mqtt",
     ];
-    this.brokerIndex = 0;
+    this.cloudConns = new Map();
+    this.cloudConnected = false;
 
     if (this.bc) {
       this.bc.onmessage = (e) => {
-        if (e.data && e.data.sender !== this.clientId) {
-          this.handleIncomingRawMessage(e.data);
+        const msg = e.data;
+        if (!msg || msg.sender === this.clientId) return;
+        // Якщо на цьому ж комп'ютері відкрито пульт із кодом кімнати в URL — автоматично синхронізуємо кімнату
+        if (msg.room && msg.room !== this.roomId) {
+          this.setRoomId(msg.room, false);
         }
+        this.handleIncomingRawMessage(msg);
       };
     }
 
-    this.connectLanWebSocket();
-    this.connectCloudMqtt();
+    // Автоматична синхронізація коду кімнати між вкладками одного браузера через localStorage
+    window.addEventListener("storage", (e) => {
+      if (e.key === "aura_vj_room" && e.newValue && e.newValue !== this.roomId) {
+        this.setRoomId(e.newValue, false);
+      }
+    });
 
-    // Автоматичне відновлення зв'язку після розблокування екрана iPhone або зміни мережі
+    this.connectLanWebSocket();
+    this.connectCloudMqttMesh();
+
     window.addEventListener("online", () => {
-      if (!this.cloudConnected) this.connectCloudMqtt();
+      this.connectCloudMqttMesh();
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && !this.cloudConnected) {
-        this.connectCloudMqtt();
+      if (document.visibilityState === "visible") {
+        this.connectCloudMqttMesh();
       }
     });
   }
@@ -80,106 +101,216 @@ class SyncManager {
     return generated;
   }
 
-  setRoomId(newRoomId) {
+  setRoomId(newRoomId, persist = true) {
     const clean = String(newRoomId).trim().toUpperCase();
-    if (!clean) return;
+    if (!clean || clean === this.roomId) return;
     this.roomId = clean;
     this.closeWebRTC();
-    try {
-      localStorage.setItem("aura_vj_room", clean);
-    } catch {}
+    this.lastTelemetrySeqBySender.clear();
 
-    // Якщо WebSocket з брокером вже відкритий, миттєво підписуємося на топік нової кімнати
-    if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN && this.cloudConnected) {
-      this.cloudWs.send(this.buildMqttSubscribePacket(this.getTopic()));
-    } else {
-      if (this.cloudWs) {
+    if (persist) {
+      try {
+        localStorage.setItem("aura_vj_room", clean);
+      } catch {}
+    }
+
+    const subPacket = this.buildMqttSubscribePacket(this.getTopic());
+    let anyOpen = false;
+    for (const conn of this.cloudConns.values()) {
+      if (conn.ws && conn.ws.readyState === WebSocket.OPEN && conn.connected) {
         try {
-          this.cloudWs.close();
+          conn.ws.send(subPacket);
+          anyOpen = true;
         } catch {}
       }
-      this.connectCloudMqtt();
+    }
+    if (!anyOpen) {
+      this.connectCloudMqttMesh();
     }
     this.notifyStatus();
+    this.sendImmediatePing();
   }
 
   getTopic() {
     return `auravj/room/${this.roomId}`;
   }
 
+  nextMqttPacketId() {
+    this.mqttPacketId = (this.mqttPacketId % 65530) + 1;
+    return this.mqttPacketId;
+  }
+
   /**
-   * 1. Хмарна синхронізація через легкий бінарний MQTT 3.1.1 over WSS
-   * Дозволяє з'єднати iPhone та Android-проектор з різних мереж із резервуванням брокерів!
+   * Підключення одночасно до основних публічних MQTT WSS брокерів (Mesh),
+   * щоб Пульт і Проектор гарантовано бачили один одного навіть якщо один із брокерів недоступний
    */
-  connectCloudMqtt() {
-    const brokerUrl = this.brokers[this.brokerIndex % this.brokers.length];
-    clearTimeout(this.connectTimeout);
+  connectCloudMqttMesh() {
+    // Підтримуємо паралельне з'єднання з першими 2 брокерами (EMQX + HiveMQ)
+    const activeBrokers = this.brokers.slice(0, 2);
+    activeBrokers.forEach((url, index) => {
+      this.ensureBrokerConnection(url, index);
+    });
+  }
+
+  ensureBrokerConnection(brokerUrl, index) {
+    const existing = this.cloudConns.get(brokerUrl);
+    if (
+      existing &&
+      existing.ws &&
+      (existing.ws.readyState === WebSocket.OPEN ||
+        existing.ws.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
+
+    const connState = {
+      url: brokerUrl,
+      ws: null,
+      connected: false,
+      pingInterval: null,
+      connectTimeout: null,
+      reconnectTimer: null,
+    };
+    this.cloudConns.set(brokerUrl, connState);
+
     try {
-      if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN) {
-        this.cloudWs.close();
-      }
       const ws = new WebSocket(brokerUrl, "mqtt");
       ws.binaryType = "arraybuffer";
-      this.cloudWs = ws;
+      connState.ws = ws;
 
-      // Якщо брокер не відповів за 4.5 сек — перемикаємось на резервний
-      this.connectTimeout = setTimeout(() => {
-        if (!this.cloudConnected && this.cloudWs === ws) {
-          this.brokerIndex = (this.brokerIndex + 1) % this.brokers.length;
+      connState.connectTimeout = setTimeout(() => {
+        if (!connState.connected && connState.ws === ws) {
           try {
             ws.close();
           } catch {}
         }
-      }, 4500);
+      }, 5000);
 
       ws.onopen = () => {
-        // Відправляємо MQTT CONNECT пакет
-        ws.send(this.buildMqttConnectPacket(this.clientId));
+        const subClientId = `${this.clientId}_b${index}`;
+        try {
+          ws.send(this.buildMqttConnectPacket(subClientId));
+        } catch {}
       };
 
       ws.onmessage = (event) => {
         const bytes = new Uint8Array(event.data);
-        if (bytes.length < 2) return;
-        const packetType = bytes[0] >> 4;
-
-        if (packetType === 2) {
-          // CONNACK -> підписуємось на топік кімнати
-          clearTimeout(this.connectTimeout);
-          this.cloudConnected = true;
-          ws.send(this.buildMqttSubscribePacket(this.getTopic()));
-          this.notifyStatus();
-
-          clearInterval(this.pingInterval);
-          this.pingInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(new Uint8Array([0xc0, 0x00])); // PINGREQ
-            }
-          }, 25000);
-        } else if (packetType === 3) {
-          // PUBLISH пакет від іншого пристрою в кімнаті
-          const parsed = this.parseMqttPublishPacket(bytes);
-          if (parsed && parsed.sender !== this.clientId) {
-            this.handleIncomingRawMessage(parsed);
-          }
-        }
+        this.parseMqttStreamFrames(ws, bytes, connState);
       };
 
       ws.onclose = () => {
-        const wasConnected = this.cloudConnected;
-        this.cloudConnected = false;
-        clearInterval(this.pingInterval);
-        clearTimeout(this.connectTimeout);
-        this.notifyStatus();
-        if (!wasConnected) {
-          this.brokerIndex = (this.brokerIndex + 1) % this.brokers.length;
-        }
-        setTimeout(() => {
-          if (this.cloudWs === ws) this.connectCloudMqtt();
-        }, 2500);
+        connState.connected = false;
+        clearInterval(connState.pingInterval);
+        clearTimeout(connState.connectTimeout);
+        this.updateCloudConnectedFlag();
+
+        clearTimeout(connState.reconnectTimer);
+        connState.reconnectTimer = setTimeout(() => {
+          this.ensureBrokerConnection(brokerUrl, index);
+        }, 3000);
       };
 
       ws.onerror = () => {};
     } catch {}
+  }
+
+  updateCloudConnectedFlag() {
+    let anyConnected = false;
+    for (const conn of this.cloudConns.values()) {
+      if (conn.connected && conn.ws && conn.ws.readyState === WebSocket.OPEN) {
+        anyConnected = true;
+        break;
+      }
+    }
+    const changed = this.cloudConnected !== anyConnected;
+    this.cloudConnected = anyConnected;
+    if (changed) {
+      this.notifyStatus();
+    }
+  }
+
+  /**
+   * Потоковий бінарний парсер MQTT 3.1.1 (коректно обробляє склеєні TCP/WS фрейми)
+   */
+  parseMqttStreamFrames(ws, bytes, connState) {
+    let offset = 0;
+    while (offset + 2 <= bytes.length) {
+      const headerByte = bytes[offset];
+      const packetType = headerByte >> 4;
+
+      let multiplier = 1;
+      let remLen = 0;
+      let idx = offset + 1;
+      let encodedByte;
+      let validLength = true;
+
+      do {
+        if (idx >= bytes.length) {
+          validLength = false;
+          break;
+        }
+        encodedByte = bytes[idx++];
+        remLen += (encodedByte & 127) * multiplier;
+        multiplier *= 128;
+      } while ((encodedByte & 128) !== 0 && idx < offset + 5);
+
+      if (!validLength) break;
+      const packetEnd = idx + remLen;
+      if (packetEnd > bytes.length) break;
+
+      if (packetType === 2) {
+        // CONNACK -> підписуємось на топік кімнати та миттєво сповіщаємо про присутність
+        clearTimeout(connState.connectTimeout);
+        connState.connected = true;
+        this.updateCloudConnectedFlag();
+
+        try {
+          ws.send(this.buildMqttSubscribePacket(this.getTopic()));
+        } catch {}
+
+        this.sendImmediatePing();
+
+        clearInterval(connState.pingInterval);
+        connState.pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            try {
+              ws.send(new Uint8Array([0xc0, 0x00])); // PINGREQ
+            } catch {}
+          }
+        }, 25000);
+      } else if (packetType === 3) {
+        // PUBLISH пакет від іншого пристрою в кімнаті
+        if (idx + 2 <= packetEnd) {
+          const topicLen = (bytes[idx] << 8) | bytes[idx + 1];
+          let payloadStart = idx + 2 + topicLen;
+          const qos = (headerByte >> 1) & 0x03;
+          if (qos > 0) {
+            payloadStart += 2;
+          }
+          if (payloadStart <= packetEnd) {
+            const payloadBytes = bytes.subarray(payloadStart, packetEnd);
+            try {
+              const jsonStr = new TextDecoder().decode(payloadBytes);
+              const parsed = JSON.parse(jsonStr);
+              if (parsed && parsed.sender !== this.clientId) {
+                this.handleIncomingRawMessage(parsed);
+              }
+            } catch {}
+          }
+        }
+      }
+
+      offset = packetEnd;
+    }
+  }
+
+  sendImmediatePing() {
+    setTimeout(() => {
+      this.send({
+        type: "peerHeartbeat",
+        isPing: true,
+      });
+    }, 60);
   }
 
   encodeLength(len) {
@@ -207,7 +338,8 @@ class SyncManager {
 
   buildMqttSubscribePacket(topic) {
     const tBytes = this.encodeUtf8(topic);
-    const varHeader = [0x00, 0x01];
+    const pktId = this.nextMqttPacketId();
+    const varHeader = [pktId >> 8, pktId & 0xff];
     const payload = [tBytes.length >> 8, tBytes.length & 0xff, ...tBytes, 0x00];
     const remLen = varHeader.length + payload.length;
     return new Uint8Array([0x82, ...this.encodeLength(remLen), ...varHeader, ...payload]);
@@ -225,28 +357,6 @@ class SyncManager {
     return out;
   }
 
-  parseMqttPublishPacket(bytes) {
-    try {
-      let multiplier = 1;
-      let value = 0;
-      let idx = 1;
-      let encodedByte;
-      do {
-        encodedByte = bytes[idx++];
-        value += (encodedByte & 127) * multiplier;
-        multiplier *= 128;
-      } while ((encodedByte & 128) !== 0 && idx < 5);
-
-      const topicLen = (bytes[idx] << 8) | bytes[idx + 1];
-      const payloadStart = idx + 2 + topicLen;
-      const payloadBytes = bytes.subarray(payloadStart);
-      const jsonStr = new TextDecoder().decode(payloadBytes);
-      return JSON.parse(jsonStr);
-    } catch {
-      return null;
-    }
-  }
-
   /**
    * 2. Локальний WebSocket (якщо запущено node server.js у локальній мережі)
    */
@@ -262,7 +372,10 @@ class SyncManager {
 
     try {
       this.lanWs = new WebSocket(wsUrl);
-      this.lanWs.onopen = () => this.notifyStatus();
+      this.lanWs.onopen = () => {
+        this.notifyStatus();
+        this.sendImmediatePing();
+      };
       this.lanWs.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -281,10 +394,11 @@ class SyncManager {
   /**
    * 3. WebRTC P2P DataChannel (Ультра-низька затримка 1-15ms через прямий браузер-браузер UDP)
    */
-  setupWebRTC(isInitiator) {
+  setupWebRTC(isInitiator, targetPeerId = null) {
     if (typeof RTCPeerConnection === "undefined") return;
     this.closeWebRTC();
     this.iceCandidateQueue = [];
+    this.rtcTargetPeer = targetPeerId;
 
     const config = {
       iceServers: [
@@ -297,27 +411,42 @@ class SyncManager {
     try {
       this.pc = new RTCPeerConnection(config);
 
+      // Якщо за 7 секунд P2P не встановився — очищаємо RTCPeerConnection для повторної спроби
+      this.rtcWatchdog = setTimeout(() => {
+        if (!this.p2pConnected) {
+          this.closeWebRTC();
+        }
+      }, 7000);
+
       this.pc.onicecandidate = (event) => {
         if (event.candidate) {
-          this.sendSignalingMessage({
-            type: "_rtc_ice",
-            candidate: event.candidate,
-          });
+          // Невелика затримка гарантує, що _rtc_offer/answer дійде раніше за _rtc_ice
+          setTimeout(() => {
+            this.sendSignalingMessage({
+              type: "_rtc_ice",
+              target: this.rtcTargetPeer,
+              candidate: event.candidate,
+            });
+          }, 35);
         }
       };
 
       this.pc.onconnectionstatechange = () => {
         if (!this.pc) return;
         const state = this.pc.connectionState;
-        if (state === "disconnected" || state === "failed" || state === "closed") {
-          this.p2pConnected = false;
-          this.webrtcChannel = null;
+        if (state === "connected") {
+          clearTimeout(this.rtcWatchdog);
+        } else if (
+          state === "disconnected" ||
+          state === "failed" ||
+          state === "closed"
+        ) {
+          this.closeWebRTC();
           this.notifyStatus();
         }
       };
 
       if (isInitiator) {
-        // Режим unordered і maxRetransmits: 0 забезпечує семантику UDP без черг і затримок
         const dc = this.pc.createDataChannel("aura_vj_p2p", {
           ordered: false,
           maxRetransmits: 0,
@@ -330,23 +459,27 @@ class SyncManager {
           .then(() => {
             this.sendSignalingMessage({
               type: "_rtc_offer",
+              target: this.rtcTargetPeer,
               sdp: this.pc.localDescription,
             });
           })
-          .catch(() => {});
+          .catch(() => {
+            this.closeWebRTC();
+          });
       } else {
         this.pc.ondatachannel = (event) => {
           this.bindDataChannel(event.channel);
         };
       }
-    } catch (err) {
-      console.warn("RTC Setup error:", err);
+    } catch {
+      this.closeWebRTC();
     }
   }
 
   bindDataChannel(dc) {
     this.webrtcChannel = dc;
     dc.onopen = () => {
+      clearTimeout(this.rtcWatchdog);
       this.p2pConnected = true;
       this.notifyStatus();
     };
@@ -366,9 +499,10 @@ class SyncManager {
   }
 
   async handleRtcOffer(msg) {
-    if (!this.pc || this.pc.signalingState === "closed") {
-      this.setupWebRTC(false);
-    }
+    if (msg.target && msg.target !== this.clientId) return;
+    if (this.p2pConnected) return;
+
+    this.setupWebRTC(false, msg.sender);
     if (!this.pc) return;
     try {
       await this.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
@@ -377,32 +511,37 @@ class SyncManager {
       await this.pc.setLocalDescription(answer);
       this.sendSignalingMessage({
         type: "_rtc_answer",
+        target: msg.sender,
         sdp: this.pc.localDescription,
       });
-    } catch (err) {
-      console.warn("RTC Offer handle error:", err);
+    } catch {
+      this.closeWebRTC();
     }
   }
 
   async handleRtcAnswer(msg) {
-    if (!this.pc) return;
+    if (msg.target && msg.target !== this.clientId) return;
+    if (!this.pc || this.pc.signalingState !== "have-local-offer") return;
     try {
       await this.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
       this.processIceQueue();
-    } catch (err) {
-      console.warn("RTC Answer handle error:", err);
+    } catch {
+      this.closeWebRTC();
     }
   }
 
   handleRtcIce(msg) {
+    if (msg.target && msg.target !== this.clientId) return;
     if (!msg.candidate) return;
-    const candidate = new RTCIceCandidate(msg.candidate);
-    if (this.pc && this.pc.remoteDescription && this.pc.remoteDescription.type) {
-      this.pc.addIceCandidate(candidate).catch(() => {});
-    } else {
-      if (!this.iceCandidateQueue) this.iceCandidateQueue = [];
-      this.iceCandidateQueue.push(candidate);
-    }
+    try {
+      const candidate = new RTCIceCandidate(msg.candidate);
+      if (this.pc && this.pc.remoteDescription && this.pc.remoteDescription.type) {
+        this.pc.addIceCandidate(candidate).catch(() => {});
+      } else {
+        if (!this.iceCandidateQueue) this.iceCandidateQueue = [];
+        this.iceCandidateQueue.push(candidate);
+      }
+    } catch {}
   }
 
   processIceQueue() {
@@ -414,6 +553,7 @@ class SyncManager {
   }
 
   closeWebRTC() {
+    clearTimeout(this.rtcWatchdog);
     if (this.webrtcChannel) {
       try {
         this.webrtcChannel.close();
@@ -429,25 +569,66 @@ class SyncManager {
     this.p2pConnected = false;
   }
 
-  sendSignalingMessage(payload) {
-    const packet = { ...payload, sender: this.clientId, room: this.roomId };
-    const jsonStr = JSON.stringify(packet);
-    if (this.bc) this.bc.postMessage(packet);
-    if (this.lanWs && this.lanWs.readyState === WebSocket.OPEN) {
-      this.lanWs.send(jsonStr);
-    }
-    if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN && this.cloudConnected) {
-      this.cloudWs.send(this.buildMqttPublishPacket(this.getTopic(), jsonStr));
+  publishToCloudBrokers(jsonStr) {
+    const mqttPacket = this.buildMqttPublishPacket(this.getTopic(), jsonStr);
+    for (const conn of this.cloudConns.values()) {
+      if (conn.connected && conn.ws && conn.ws.readyState === WebSocket.OPEN) {
+        try {
+          conn.ws.send(mqttPacket);
+        } catch {}
+      }
     }
   }
 
+  sendSignalingMessage(payload) {
+    const packet = {
+      ...payload,
+      sender: this.clientId,
+      room: this.roomId,
+      seq: ++this.msgSeq,
+    };
+    const jsonStr = JSON.stringify(packet);
+    if (this.bc) this.bc.postMessage(packet);
+    if (this.lanWs && this.lanWs.readyState === WebSocket.OPEN) {
+      try {
+        this.lanWs.send(jsonStr);
+      } catch {}
+    }
+    this.publishToCloudBrokers(jsonStr);
+  }
+
   /**
-   * Централізований обробник вхідних повідомлень з усіх каналів
+   * Централізований обробник вхідних повідомлень з усіх каналів із дедуплікацією
    */
   handleIncomingRawMessage(msg) {
     if (!msg || msg.sender === this.clientId) return;
+    if (msg.room && msg.room !== this.roomId) return;
 
-    // 1. WebRTC Сигналізація
+    // 1. Для dspTelemetry приймаємо тільки найсвіжіші пакети (щоб повільний MQTT не перекривав швидкий P2P/BC)
+    if (msg.type === "dspTelemetry") {
+      if (msg.seq) {
+        const lastSeq = this.lastTelemetrySeqBySender.get(msg.sender) || 0;
+        if (msg.seq <= lastSeq) return;
+        this.lastTelemetrySeqBySender.set(msg.sender, msg.seq);
+      }
+      if (this.onMessage) {
+        this.onMessage(msg);
+      }
+      return;
+    }
+
+    // 2. Дедуплікація керуючих та сигнальних пакетів (між EMQX, HiveMQ, WebRTC та BroadcastChannel)
+    if (msg.seq) {
+      const key = `${msg.sender}:${msg.seq}`;
+      if (this.seenControlKeys.has(key)) return;
+      this.seenControlKeys.add(key);
+      if (this.seenControlKeys.size > 400) {
+        const first = this.seenControlKeys.values().next().value;
+        this.seenControlKeys.delete(first);
+      }
+    }
+
+    // 3. WebRTC Сигналізація
     if (msg.type === "_rtc_offer") {
       this.handleRtcOffer(msg);
       return;
@@ -461,11 +642,10 @@ class SyncManager {
       return;
     }
 
-    // 2. Автоматичне створення P2P каналу при виявленні іншого пристрою в кімнаті
+    // 4. Автоматичне встановлення P2P каналу при виявленні іншого пристрою в кімнаті
     if (msg.type === "peerHeartbeat" && !this.p2pConnected && !this.pc) {
-      // Детерміновано обираємо ініціатора (пристрій з більшим clientId)
       if (this.clientId > msg.sender) {
-        this.setupWebRTC(true);
+        this.setupWebRTC(true, msg.sender);
       }
     }
 
@@ -474,46 +654,113 @@ class SyncManager {
     }
   }
 
-  send(payload) {
-    const packet = { ...payload, sender: this.clientId, room: this.roomId };
-    const jsonStr = JSON.stringify(packet);
+  /**
+   * Акумуляція піків аудіо-телеметрії між мережевими відправками (Peak-Hold + Beat Latch)
+   * Гарантує, що жоден удар бочки (isBeat = 1) або пік басу не буде пропущений тротлером!
+   */
+  mergeTelemetryPeak(acc, state) {
+    if (!acc || !Array.isArray(state)) {
+      return Array.isArray(state) ? [...state] : state;
+    }
+    return [
+      Math.max(acc[0] || 0, state[0] || 0), // subBass peak
+      Math.max(acc[1] || 0, state[1] || 0), // bass peak
+      Math.max(acc[2] || 0, state[2] || 0), // mid peak
+      Math.max(acc[3] || 0, state[3] || 0), // high peak
+      Math.max(acc[4] || 0, state[4] || 0), // beatIntensity peak
+      state[5] || acc[5] || 128,            // bpm
+      state[6] ?? acc[6] ?? 0,              // beatPhase
+      acc[7] || state[7] ? 1 : 0,           // latched isBeat!
+      state[8] ?? acc[8] ?? 0,              // beatCount
+      state[9] ?? acc[9] ?? 0,              // accumulatedTime
+    ];
+  }
 
-    // 1. Локальні вкладки (0ms)
+  send(payload) {
+    const seq = ++this.msgSeq;
+    const basePacket = { ...payload, sender: this.clientId, room: this.roomId, seq };
+
+    // 1. Локальні вкладки та вікна на тому ж ПК/Mac (0ms затримки, 60 FPS без тротлінгу)
     if (this.bc) {
-      this.bc.postMessage(packet);
+      try {
+        this.bc.postMessage(basePacket);
+      } catch {}
     }
 
-    // 2. WebRTC P2P DataChannel (1-15ms пряме з'єднання)
+    if (payload.type === "dspTelemetry" && Array.isArray(payload.state)) {
+      const now = performance.now();
+      this.p2pPeak = this.mergeTelemetryPeak(this.p2pPeak, payload.state);
+      this.mqttPeak = this.mergeTelemetryPeak(this.mqttPeak, payload.state);
+
+      // 2. WebRTC P2P DataChannel (~40 FPS, або МИТТЄВО на кожен удар бочки!)
+      if (this.webrtcChannel && this.webrtcChannel.readyState === "open") {
+        const isBeat = this.p2pPeak[7] === 1;
+        const elapsedP2P = now - this.lastTelemetrySentP2P;
+        if (elapsedP2P >= 24 || (isBeat && elapsedP2P >= 12)) {
+          this.lastTelemetrySentP2P = now;
+          const p2pPacket = {
+            type: "dspTelemetry",
+            state: this.p2pPeak,
+            sender: this.clientId,
+            room: this.roomId,
+            seq,
+          };
+          this.p2pPeak = null;
+          try {
+            this.webrtcChannel.send(JSON.stringify(p2pPacket));
+          } catch {
+            this.p2pConnected = false;
+          }
+        }
+      }
+
+      // 3. Локальний Wi-Fi сервер
+      if (this.lanWs && this.lanWs.readyState === WebSocket.OPEN) {
+        try {
+          this.lanWs.send(JSON.stringify(basePacket));
+        } catch {}
+      }
+
+      // 4. Хмарний MQTT Mesh (~20 FPS, або МИТТЄВО на удар бочки!)
+      // Відправляємо завжди як надійний канал (навіть якщо відкрито P2P з іншою вкладкою)
+      if (this.cloudConnected) {
+        const isBeat = this.mqttPeak[7] === 1;
+        const elapsedMqtt = now - this.lastTelemetrySentMqtt;
+        if (elapsedMqtt >= 50 || (isBeat && elapsedMqtt >= 25)) {
+          this.lastTelemetrySentMqtt = now;
+          const mqttPacket = {
+            type: "dspTelemetry",
+            state: this.mqttPeak,
+            sender: this.clientId,
+            room: this.roomId,
+            seq,
+          };
+          this.mqttPeak = null;
+          this.publishToCloudBrokers(JSON.stringify(mqttPacket));
+        }
+      }
+      return;
+    }
+
+    // Усі інші події (перемикання сцен, XY-пад, Filmora FX, Strobe, Shockwave, Heartbeat) відправляємо миттєво у всі канали
+    const jsonStr = JSON.stringify(basePacket);
+
     if (this.webrtcChannel && this.webrtcChannel.readyState === "open") {
       try {
-        if (payload.type === "dspTelemetry") {
-          const now = performance.now();
-          if (now - this.lastTelemetrySentP2P < 33) return; // ~30 FPS для P2P
-          this.lastTelemetrySentP2P = now;
-        }
         this.webrtcChannel.send(jsonStr);
-        // Якщо P2P активний, високочастотну телеметрію НЕ потрібно дублювати в хмарний брокер!
-        if (payload.type === "dspTelemetry") {
-          return;
-        }
       } catch {
         this.p2pConnected = false;
       }
     }
 
-    // 3. Локальний Wi-Fi сервер
     if (this.lanWs && this.lanWs.readyState === WebSocket.OPEN) {
-      this.lanWs.send(jsonStr);
+      try {
+        this.lanWs.send(jsonStr);
+      } catch {}
     }
 
-    // 4. Хмарний MQTT (для телеметрії обмежуємо частоту до ~12 пакетів/сек для уникнення bufferbloat)
-    if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN && this.cloudConnected) {
-      if (payload.type === "dspTelemetry") {
-        const now = performance.now();
-        if (now - this.lastTelemetrySentMqtt < 80) return; // 80ms = ~12.5 FPS
-        this.lastTelemetrySentMqtt = now;
-      }
-      this.cloudWs.send(this.buildMqttPublishPacket(this.getTopic(), jsonStr));
+    if (this.cloudConnected) {
+      this.publishToCloudBrokers(jsonStr);
     }
   }
 

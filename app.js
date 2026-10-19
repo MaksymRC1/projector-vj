@@ -161,20 +161,27 @@ class AuraVJApp {
     });
     if (viewName === "projector") {
       this.resetHudTimer();
+    } else if (viewName === "remote" && !this.audioStarted) {
+      this.dsp.activeSource = "mic";
+      this.highlightSourceButton("mic");
     }
   }
 
   async ensureAudioStarted(source = "synth", file = null) {
     try {
-      await this.dsp.start(source, file);
+      const res = await this.dsp.start(source, file);
+      if (res && res.aborted) return;
       this.audioStarted = true;
+      const actualSource = (res && res.source) || source;
+      this.highlightSourceButton(actualSource === "screen" ? "native_android" : actualSource);
       const banner = document.getElementById("micStartBanner");
-      if (banner && (source === "mic" || this.currentView === "remote")) {
+      if (banner && (actualSource === "mic" || this.currentView === "remote")) {
         banner.classList.add("active");
       }
     } catch (err) {
       alert(`Увага: ${err.message}. Перемикаємо на вбудований Техно-Синтезатор.`);
-      await this.dsp.start("synth");
+      const res = await this.dsp.start("synth");
+      if (res && res.aborted) return;
       this.audioStarted = true;
       this.highlightSourceButton("synth");
     }
@@ -188,15 +195,29 @@ class AuraVJApp {
       this.ensureAudioStarted("native_android");
     }
 
-    const unlockAudio = () => {
+    const unlockAudio = (e) => {
+      const target = e?.target;
+      // Ігноруємо кліки по кнопках джерел звуку, перемикачах режимів та модалках, щоб уникнути подвійного виклику start()
+      if (
+        target instanceof Element &&
+        target.closest(
+          ".src-pill, #micStartBanner, #btnStartRemoteMic, .view-btn, #btnQrModal, #btnRoomBadge, #btnFullscreen, #qrModal, #proModal, #shortcutsModal"
+        )
+      ) {
+        return;
+      }
+      // На екрані Проектора або при активному прийомі телеметрії з Пульта НЕ запускаємо локальний синтезатор!
+      if (this.currentView === "projector" || this.dsp.activeSource === "remote") {
+        return;
+      }
       if (!this.audioStarted) {
         this.ensureAudioStarted(this.dsp.activeSource);
       }
       window.removeEventListener("pointerdown", unlockAudio);
       window.removeEventListener("keydown", unlockAudio);
     };
-    window.addEventListener("pointerdown", unlockAudio, { once: true });
-    window.addEventListener("keydown", unlockAudio, { once: true });
+    window.addEventListener("pointerdown", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
 
     document.querySelectorAll(".view-btn").forEach((btn) => {
       btn.addEventListener("click", () => this.setView(btn.dataset.targetView));
@@ -229,15 +250,14 @@ class AuraVJApp {
       });
     }
 
-    // Банер швидкого увімкнення мікрофона на пульті смартфона
-    const btnStartRemoteMic = document.getElementById("btnStartRemoteMic");
+    // Банер швидкого увімкнення мікрофона на пульті смартфона (без подвійного спрацювання)
     const micBanner = document.getElementById("micStartBanner");
-    const activateMicHandler = async () => {
+    const activateMicHandler = async (e) => {
+      if (e) e.stopPropagation();
       this.highlightSourceButton("mic");
       await this.ensureAudioStarted("mic");
       if (micBanner) micBanner.classList.add("active");
     };
-    if (btnStartRemoteMic) btnStartRemoteMic.addEventListener("click", activateMicHandler);
     if (micBanner) micBanner.addEventListener("click", activateMicHandler);
 
     fileInput.addEventListener("change", async (e) => {
@@ -1500,10 +1520,8 @@ class AuraVJApp {
     if (!msg || !msg.type) return;
     if (msg.type === "syncStatus") {
       const badge = document.getElementById("btnRoomBadge");
-      const text = document.getElementById("roomCodeText");
       const studioBtn = document.getElementById("btnOpenStudio");
-      if (text && msg.roomId) {
-        text.textContent = msg.p2p ? `${msg.roomId} ⚡` : msg.roomId;
+      if (msg.roomId) {
         this.visualizer.roomId = msg.roomId;
       }
       if (badge) {
@@ -1513,30 +1531,45 @@ class AuraVJApp {
       if (studioBtn && msg.roomId) {
         studioBtn.href = `studio.html?room=${encodeURIComponent(msg.roomId)}`;
       }
+      const isStillLinked =
+        this.lastPeerHeartbeat &&
+        performance.now() - this.lastPeerHeartbeat < 16000;
+      this.updatePeerStatusUI(!!isStillLinked);
       return;
     }
+
+    // Будь-який пакет від іншого учасника кімнати підтверджує активний зв'язок
+    this.lastPeerHeartbeat = performance.now();
+    this.updatePeerStatusUI(true, msg.role);
+
     if (msg.type === "peerHeartbeat") {
-      this.lastPeerHeartbeat = performance.now();
-      this.updatePeerStatusUI(true, msg.role);
-      // Відповідаємо синхронізацією стану новому підключеному пристрою
-      if (msg.role !== this.currentView && msg.isPing) {
+      // Відповідаємо синхронізацією стану підключеному пристрою
+      if (msg.isPing && !msg.isPong) {
         this.sync.send({
           type: "stateSync",
+          isPong: true,
           mode: this.visualizer.modes[this.visualizer.modeIndex],
           isPro: this.isPro,
+          xy: { ...this.visualizer.xy },
+          colorShift: this.visualizer.colorShift,
           postFx: { ...this.visualizer.postFx },
           chopRouting: { ...this.visualizer.chopRouting },
         });
       }
     } else if (msg.type === "stateSync") {
-      this.lastPeerHeartbeat = performance.now();
-      this.updatePeerStatusUI(true);
       if (msg.mode) {
         this.visualizer.setMode(msg.mode);
         this.highlightModeButtons(msg.mode);
       }
       if (typeof msg.isPro === "boolean") {
         this.setProStatus(msg.isPro, false);
+      }
+      if (msg.xy && typeof msg.xy.x === "number") {
+        this.visualizer.setXY(msg.xy.x, msg.xy.y);
+        this.updateXYUI(msg.xy.x, msg.xy.y);
+      }
+      if (typeof msg.colorShift === "number") {
+        this.visualizer.colorShift = msg.colorShift;
       }
       if (msg.postFx || msg.chopRouting) {
         this.applyPatchState(msg);
@@ -1566,11 +1599,16 @@ class AuraVJApp {
       }
     } else if (msg.type === "dspTelemetry") {
       // Приймаємо аудіо-телеметрію з пульта як у режимі Проектора, так і у Split-режимі!
-      if (
-        this.currentView !== "remote" &&
-        this.dsp.activeSource !== "native_android"
-      ) {
-        this.dsp.activeSource = "remote";
+      // Якщо на цьому пристрої не увімкнено власний мікрофон/файл/захоплення вкладки — слухаємо пульт
+      const hasDedicatedLocalInput =
+        this.audioStarted &&
+        (this.dsp.activeSource === "mic" ||
+          this.dsp.activeSource === "file" ||
+          this.dsp.activeSource === "screen" ||
+          this.dsp.activeSource === "native_android");
+
+      if (this.currentView !== "remote" && !hasDedicatedLocalInput) {
+        this.audioStarted = false;
         this.dsp.ingestRemoteTelemetry(msg.state);
       }
     }
@@ -1578,6 +1616,15 @@ class AuraVJApp {
 
   setupPeerSyncHeartbeat() {
     this.lastPeerHeartbeat = null;
+    // Миттєвий анонс присутності при старті
+    setTimeout(() => {
+      this.sync.send({
+        type: "peerHeartbeat",
+        role: this.currentView,
+        isPing: true,
+      });
+    }, 250);
+
     setInterval(() => {
       this.sync.send({
         type: "peerHeartbeat",
@@ -1590,7 +1637,7 @@ class AuraVJApp {
       ) {
         this.updatePeerStatusUI(false);
       }
-    }, 5000);
+    }, 2500);
   }
 
   updatePeerStatusUI(isLinked, role = null) {
@@ -1602,13 +1649,15 @@ class AuraVJApp {
       badge.classList.add("peer-linked");
       badge.classList.toggle("p2p-active", !!this.sync.p2pConnected);
       const connSuffix = this.sync.p2pConnected ? " ⚡ P2P" : " 🟢";
-      badge.title = `Кімната ${this.sync.roomId}: З'єднано з ${role === "remote" ? "Пультом (iPhone)" : "Екраном (Проектор)"}!${this.sync.p2pConnected ? " (Швидкісний WebRTC канал <15ms)" : ""}`;
+      badge.title = `Кімната ${this.sync.roomId}: Синхронізовано з ${role === "remote" ? "Пультом" : "Проектором"}!${this.sync.p2pConnected ? " (Прямий WebRTC канал <15ms)" : ""}`;
       text.textContent = `${this.sync.roomId}${connSuffix}`;
     } else {
       badge.classList.remove("peer-linked");
       badge.classList.remove("p2p-active");
       badge.title = `Кімната ${this.sync.roomId}: Очікування підключення другого пристрою`;
-      text.textContent = this.sync.roomId;
+      text.textContent = this.sync.p2pConnected
+        ? `${this.sync.roomId} ⚡`
+        : this.sync.roomId;
     }
   }
 
@@ -1619,13 +1668,15 @@ class AuraVJApp {
     const hasLiveRemote =
       this.dsp.activeSource === "remote" &&
       this.dsp.lastRemoteTelemetryTime &&
-      now - this.dsp.lastRemoteTelemetryTime < 2500;
+      now - this.dsp.lastRemoteTelemetryTime < 3000;
 
     if (this.audioStarted || hasLiveRemote) {
       dspState = this.dsp.update(now);
     } else {
-      const t = now / 1000;
-      const beatPhase = (now % 468.75) / 468.75;
+      // Демо-біт синхронізовано за глобальним системним часом Date.now() між усіма пристроями
+      const wallMs = Date.now();
+      const t = (wallMs % 3600000) / 1000;
+      const beatPhase = (wallMs % 468.75) / 468.75;
       const kick = Math.pow(Math.max(0, 1.0 - beatPhase * 3.2), 2.0);
       dspState = {
         subBass: 0.25 + kick * 0.72,
@@ -1635,13 +1686,20 @@ class AuraVJApp {
         energy: 0.5,
         isBeat: beatPhase < 0.08,
         beatIntensity: kick,
-        beatCount: Math.floor(now / 468.75),
+        beatCount: Math.floor((wallMs % 36000000) / 468.75),
         bpm: 128,
         beatPhase,
       };
     }
 
-    if (this.currentView === "remote" && this.audioStarted) {
+    // Якщо це Пульт (або Split з активним власним джерелом звуку) — транслюємо телеметрію + фазу часу на Проектор
+    const shouldBroadcastTelemetry =
+      this.currentView === "remote" ||
+      (this.currentView === "split" &&
+        this.audioStarted &&
+        this.dsp.activeSource !== "remote");
+
+    if (shouldBroadcastTelemetry) {
       this.sync.send({
         type: "dspTelemetry",
         state: [
@@ -1653,8 +1711,18 @@ class AuraVJApp {
           dspState.bpm || 128,
           Math.round(dspState.beatPhase * 100) / 100,
           dspState.isBeat ? 1 : 0,
+          dspState.beatCount || 0,
+          Math.round(this.visualizer.accumulatedTime * 100) / 100,
         ],
       });
+    } else if (hasLiveRemote && typeof dspState.remoteTime === "number") {
+      // Підтягуємо внутрішній час шейдерів проектора до часу пульта для 100% фазової синхронізації
+      const timeDiff = dspState.remoteTime - this.visualizer.accumulatedTime;
+      if (Math.abs(timeDiff) > 1.2) {
+        this.visualizer.accumulatedTime = dspState.remoteTime;
+      } else if (Math.abs(timeDiff) > 0.05) {
+        this.visualizer.accumulatedTime += timeDiff * 0.22;
+      }
     }
 
     this.visualizer.render(dspState, now);
@@ -1664,7 +1732,8 @@ class AuraVJApp {
     if (micDot) {
       micDot.classList.toggle(
         "live",
-        this.audioStarted && this.dsp.activeSource === "mic"
+        this.audioStarted &&
+          (this.dsp.activeSource === "mic" || this.dsp.activeSource === "screen")
       );
     }
 
