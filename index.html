@@ -93,6 +93,17 @@
           </svg>
           <span id="monitorBtnText">MONITOR</span>
         </button>
+        <button
+          class="room-pill hud-toggle-btn"
+          id="btnToggleProjectorHud"
+          title="Згорнути/розгорнути меню (верхнє та нижнє) на проекторі (Клавіша U)"
+        >
+          <svg class="ico" id="icoTopBarHud" viewBox="0 0 24 24">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span id="txtTopBarHud">МЕНЮ: ВКЛ</span>
+        </button>
       </div>
 
       <div class="view-switcher" role="tablist" aria-label="Режим екрана">
@@ -250,6 +261,13 @@
           </svg>
           <span class="dock-label">Sync QR</span>
         </button>
+        <button class="dock-item dock-action" id="btnDockToggleHud" tabindex="-1" title="Згорнути меню (Клавіша U)">
+          <svg class="ico ico-lg" viewBox="0 0 24 24">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+            <line x1="1" y1="1" x2="23" y2="23" />
+          </svg>
+          <span class="dock-label">Hide UI</span>
+        </button>
         <button class="dock-item dock-action" id="btnFullscreen" tabindex="-1">
           <svg class="ico ico-lg" viewBox="0 0 24 24">
             <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
@@ -257,10 +275,42 @@
           <span class="dock-label">Full</span>
         </button>
       </nav>
+
+      <!-- Плаваюча кнопка швидкого повернення меню при наведенні миші чи дотику на проекторі -->
+      <button class="floating-restore-hud-btn" id="btnFloatingRestoreHud" title="Розгорнути меню (Клавіша U)">
+        <svg class="ico" viewBox="0 0 24 24">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+        <span>РОЗГОРНУТИ МЕНЮ</span>
+      </button>
     </section>
 
     <!-- СЕКЦІЯ 2: PRO STUDIO CONTROLLER DECK -->
     <section class="mobile-vj-deck" id="mobileDeck" aria-label="Мобільний VJ Пульт">
+      <!-- ПАНЕЛЬ КЕРУВАННЯ ЕКРАНОМ ПРОЕКТОРА З ТЕЛЕФОНУ -->
+      <div class="projector-remote-bar" id="projectorRemoteBar">
+        <div class="remote-bar-info">
+          <span class="live-dot" id="dotProjectorHudStatus"></span>
+          <div class="remote-bar-texts">
+            <span class="remote-bar-title">ЕКРАН ПРОЕКТОРА</span>
+            <span class="remote-bar-sub" id="txtRemoteProjectorHudState">Меню видимі</span>
+          </div>
+        </div>
+        <button
+          class="btn-toggle-hud-remote"
+          id="btnRemoteToggleHud"
+          type="button"
+          title="Згорнути/розгорнути верхнє та нижнє меню на проекторі"
+        >
+          <svg class="ico" id="icoRemoteHud" viewBox="0 0 24 24">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span id="lblRemoteToggleHud">Згорнути меню</span>
+        </button>
+      </div>
+
       <!-- Банер швидкого підключення мікрофона для мобільного пульта -->
       <div class="mic-start-banner" id="micStartBanner">
         <div class="mic-start-content">
@@ -1060,6 +1110,10 @@
             <div class="shortcut-item">
               <kbd>P</kbd>
               <span>Сховати/показати Live Monitor прев'ю</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>U</kbd>
+              <span>Згорнути/розгорнути меню проектора (Чистий екран)</span>
             </div>
             <div class="shortcut-item">
               <kbd>V</kbd>

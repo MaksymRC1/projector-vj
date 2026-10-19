@@ -24,6 +24,12 @@ class AuraVJApp {
     this.visualizer.isPro = this.isPro;
     this.visualizer.roomId = this.sync.roomId;
 
+    this.projectorHudCollapsed = false;
+    try {
+      this.projectorHudCollapsed =
+        localStorage.getItem("aura_projector_hud_collapsed") === "true";
+    } catch {}
+
     this.initUrlParams();
     this.setupUI();
     this.setupProLicensing();
@@ -41,6 +47,7 @@ class AuraVJApp {
     this.setupAutoHideHud();
     this.setupDesktopShortcuts();
     this.setupDesktopMouseInteractions();
+    this.setupProjectorHudControls();
     this.setupPeerSyncHeartbeat();
     this.setupScreenKeepAlive();
 
@@ -203,11 +210,18 @@ class AuraVJApp {
       btn.classList.toggle("active", btn.dataset.targetView === viewName);
     });
     if (viewName === "projector") {
+      document.body.classList.toggle("projector-hud-collapsed", !!this.projectorHudCollapsed);
       this.resetHudTimer();
-    } else if (viewName === "remote" && !this.audioStarted) {
-      this.dsp.activeSource = "mic";
-      this.highlightSourceButton("mic");
+    } else if (viewName === "remote") {
+      document.body.classList.remove("projector-hud-collapsed");
+      if (!this.audioStarted) {
+        this.dsp.activeSource = "mic";
+        this.highlightSourceButton("mic");
+      }
+    } else {
+      document.body.classList.toggle("projector-hud-collapsed", !!this.projectorHudCollapsed);
     }
+    this.updateProjectorHudUI();
   }
 
   async ensureAudioStarted(source = "synth", file = null) {
@@ -1209,7 +1223,7 @@ class AuraVJApp {
 
   setupAutoHideHud() {
     const triggerActivity = () => {
-      if (this.currentView === "projector") {
+      if (this.currentView === "projector" && !this.projectorHudCollapsed) {
         this.resetHudTimer();
       }
     };
@@ -1219,6 +1233,7 @@ class AuraVJApp {
   }
 
   resetHudTimer() {
+    if (this.projectorHudCollapsed) return;
     const dock = document.getElementById("projectorDock");
     if (!dock) return;
     dock.classList.remove("hud-hidden");
@@ -1228,6 +1243,140 @@ class AuraVJApp {
         dock.classList.add("hud-hidden");
       }
     }, 4000);
+  }
+
+  setupProjectorHudControls() {
+    const btnRemoteToggle = document.getElementById("btnRemoteToggleHud");
+    if (btnRemoteToggle) {
+      btnRemoteToggle.addEventListener("click", () => this.toggleProjectorHud());
+    }
+
+    const btnTopBarToggle = document.getElementById("btnToggleProjectorHud");
+    if (btnTopBarToggle) {
+      btnTopBarToggle.addEventListener("click", () => this.toggleProjectorHud());
+    }
+
+    const btnDockToggle = document.getElementById("btnDockToggleHud");
+    if (btnDockToggle) {
+      btnDockToggle.addEventListener("click", () => this.toggleProjectorHud());
+    }
+
+    const btnFloatingRestore = document.getElementById("btnFloatingRestoreHud");
+    if (btnFloatingRestore) {
+      btnFloatingRestore.addEventListener("click", () => this.setProjectorHudCollapsed(false, true));
+    }
+
+    // На проекторі: якщо меню згорнуто, при русі миші чи дотику показуємо плаваючу кнопку відновлення на 3.5 с
+    let restoreTimeout = null;
+    const showRestorePill = () => {
+      if (this.projectorHudCollapsed && (this.currentView === "projector" || this.currentView === "split")) {
+        document.body.classList.add("restore-pill-visible");
+        clearTimeout(restoreTimeout);
+        restoreTimeout = setTimeout(() => {
+          document.body.classList.remove("restore-pill-visible");
+        }, 3500);
+      }
+    };
+
+    const stage = document.getElementById("projectorStage");
+    if (stage) {
+      stage.addEventListener("pointermove", (e) => {
+        if (e.clientY < 90 || e.clientY > window.innerHeight - 90) {
+          showRestorePill();
+        }
+      });
+      stage.addEventListener("pointerdown", () => {
+        showRestorePill();
+      });
+    }
+
+    this.updateProjectorHudUI();
+  }
+
+  toggleProjectorHud() {
+    this.setProjectorHudCollapsed(!this.projectorHudCollapsed, true);
+  }
+
+  setProjectorHudCollapsed(collapsed, broadcast = true) {
+    this.projectorHudCollapsed = !!collapsed;
+
+    try {
+      localStorage.setItem("aura_projector_hud_collapsed", this.projectorHudCollapsed ? "true" : "false");
+    } catch {}
+
+    // Застосовуємо до проектора або split режиму (на пульті телефону інтерфейс не ховаємо)
+    if (this.currentView === "projector" || this.currentView === "split") {
+      document.body.classList.toggle("projector-hud-collapsed", this.projectorHudCollapsed);
+      if (this.visualizer && typeof this.visualizer.applyCanvasResolution === "function") {
+        setTimeout(() => this.visualizer.applyCanvasResolution(), 60);
+      }
+    } else {
+      document.body.classList.remove("projector-hud-collapsed");
+    }
+
+    this.updateProjectorHudUI();
+
+    if (broadcast) {
+      this.sync.send({
+        type: "setProjectorHud",
+        collapsed: this.projectorHudCollapsed,
+      });
+    }
+  }
+
+  updateProjectorHudUI() {
+    const isCollapsed = !!this.projectorHudCollapsed;
+
+    // 1. Панель на мобільному пульті
+    const remoteBar = document.getElementById("projectorRemoteBar");
+    if (remoteBar) {
+      remoteBar.classList.toggle("hud-collapsed", isCollapsed);
+    }
+    const txtRemoteState = document.getElementById("txtRemoteProjectorHudState");
+    if (txtRemoteState) {
+      txtRemoteState.textContent = isCollapsed
+        ? "Чистий екран (Меню згорнуто) 🎬"
+        : "Меню видимі";
+    }
+    const lblRemoteToggle = document.getElementById("lblRemoteToggleHud");
+    if (lblRemoteToggle) {
+      lblRemoteToggle.textContent = isCollapsed ? "Розгорнути меню" : "Згорнути меню";
+    }
+    const btnRemoteToggle = document.getElementById("btnRemoteToggleHud");
+    if (btnRemoteToggle) {
+      btnRemoteToggle.classList.toggle("active", isCollapsed);
+      btnRemoteToggle.title = isCollapsed
+        ? "Розгорнути верхнє та нижнє меню на проекторі"
+        : "Згорнути верхнє та нижнє меню на проекторі (Чистий екран)";
+    }
+    const icoRemoteHud = document.getElementById("icoRemoteHud");
+    if (icoRemoteHud) {
+      icoRemoteHud.innerHTML = isCollapsed
+        ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+        : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+    }
+
+    // 2. Кнопка у верхньому барі
+    const btnTopBar = document.getElementById("btnToggleProjectorHud");
+    const txtTopBar = document.getElementById("txtTopBarHud");
+    const icoTopBar = document.getElementById("icoTopBarHud");
+    if (btnTopBar) {
+      btnTopBar.classList.toggle("active", isCollapsed);
+    }
+    if (txtTopBar) {
+      txtTopBar.textContent = isCollapsed ? "МЕНЮ: СХОВАНО" : "МЕНЮ: ВКЛ";
+    }
+    if (icoTopBar) {
+      icoTopBar.innerHTML = isCollapsed
+        ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+        : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+    }
+
+    // 3. Кнопка у нижньому доці проектора
+    const btnDock = document.getElementById("btnDockToggleHud");
+    if (btnDock) {
+      btnDock.classList.toggle("active", isCollapsed);
+    }
   }
 
   /**
@@ -1371,6 +1520,13 @@ class AuraVJApp {
           effect: "colordrop",
           colorShift: this.visualizer.colorShift,
         });
+        return;
+      }
+
+      // Згортання/розгортання меню проектора: U
+      if (e.key.toLowerCase() === "u") {
+        e.preventDefault();
+        this.toggleProjectorHud();
         return;
       }
 
@@ -1647,6 +1803,9 @@ class AuraVJApp {
     this.updatePeerStatusUI(true, msg.role);
 
     if (msg.type === "peerHeartbeat") {
+      if (typeof msg.hudCollapsed === "boolean") {
+        this.setProjectorHudCollapsed(msg.hudCollapsed, false);
+      }
       // Відповідаємо синхронізацією стану підключеному пристрою
       if (msg.isPing && !msg.isPong) {
         this.sync.send({
@@ -1654,6 +1813,7 @@ class AuraVJApp {
           isPong: true,
           mode: this.visualizer.modes[this.visualizer.modeIndex],
           isPro: this.isPro,
+          hudCollapsed: this.projectorHudCollapsed,
           xy: { ...this.visualizer.xy },
           colorShift: this.visualizer.colorShift,
           postFx: { ...this.visualizer.postFx },
@@ -1661,6 +1821,9 @@ class AuraVJApp {
         });
       }
     } else if (msg.type === "stateSync") {
+      if (typeof msg.hudCollapsed === "boolean") {
+        this.setProjectorHudCollapsed(msg.hudCollapsed, false);
+      }
       if (msg.mode) {
         this.visualizer.setMode(msg.mode);
         this.highlightModeButtons(msg.mode);
@@ -1678,6 +1841,8 @@ class AuraVJApp {
       if (msg.postFx || msg.chopRouting) {
         this.applyPatchState(msg);
       }
+    } else if (msg.type === "setProjectorHud") {
+      this.setProjectorHudCollapsed(!!msg.collapsed, false);
     } else if (msg.type === "proStatus") {
       this.setProStatus(!!msg.isPro, false);
     } else if (msg.type === "venueKeystone") {
@@ -1723,6 +1888,7 @@ class AuraVJApp {
         type: "peerHeartbeat",
         role: this.currentView,
         isPing: true,
+        hudCollapsed: this.projectorHudCollapsed,
       });
     }, 250);
 
@@ -1731,6 +1897,7 @@ class AuraVJApp {
         type: "peerHeartbeat",
         role: this.currentView,
         isPing: true,
+        hudCollapsed: this.projectorHudCollapsed,
       });
       if (
         this.lastPeerHeartbeat &&
