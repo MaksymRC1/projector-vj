@@ -29,15 +29,15 @@ class ShaderVisualizer {
 
     this.modeIndex = 0;
     this.modes = [
-      "lasers",      // 0: Galvo Laser & Nebula
-      "synthwave",   // 1: 3D Synthwave Grid
-      "ferrofluid",  // 2: 3D Ferrofluid Orb
-      "tunnel",      // 3: Cyber Infinity Tunnel
-      "liquid",      // 4: Silk Fluid Aura
-      "fractal",     // 5: Sacred Mandala Fractal
-      "blobtrack",   // 6: TouchDesigner Blob Track & Metaballs
-      "pointcloud",  // 7: TouchDesigner 3D Point Cloud & Plexus
-      "reaction",    // 8: TouchDesigner Reaction-Diffusion & Feedback
+      "lasers",      // 0: SCN-01 Galvo Laser & Nebula
+      "blobtrack",   // 1: SCN-02 TouchDesigner Blob Track & Metaballs
+      "pointcloud",  // 2: SCN-03 TouchDesigner 3D Point Cloud & Plexus
+      "reaction",    // 3: SCN-04 TouchDesigner Reaction-Diffusion & Feedback
+      "synthwave",   // 4: SCN-05 3D Synthwave Grid & Terrain
+      "ferrofluid",  // 5: SCN-06 3D Ferrofluid Plasma Sphere
+      "tunnel",      // 6: SCN-07 Cyber Infinity Tunnel
+      "liquid",      // 7: SCN-08 Silk Fluid Aura
+      "fractal",     // 8: SCN-09 Sacred Mandala Fractal
     ];
 
     this.xy = { x: 0.5, y: 0.5 };
@@ -104,10 +104,6 @@ class ShaderVisualizer {
     };
 
     // Auto-FPS Optimizer для бюджетних проекторів (Magcubic HY300 / Mali-G31)
-    const isMobileOrTv =
-      /Android|TV|GoogleTV|SmartTV|CrKey|Tizen|webOS/i.test(navigator.userAgent) ||
-      !!window.AndroidAudioBridge;
-
     this.renderScale = isMobileOrTv ? 0.75 : 1.0;
     this.rawViewportWidth = isMobileOrTv ? 1280 : 1920;
     this.rawViewportHeight = isMobileOrTv ? 720 : 1080;
@@ -582,14 +578,14 @@ class ShaderVisualizer {
       vec3 evalSceneAndMedia(vec2 uv) {
         vec3 col = vec3(0.0);
         if (u_mode == 0) col = sceneLasers(uv);
-        else if (u_mode == 1) col = sceneSynthwave(uv);
-        else if (u_mode == 2) col = sceneFerrofluid(uv);
-        else if (u_mode == 3) col = sceneTunnel(uv);
-        else if (u_mode == 4) col = sceneLiquid(uv);
-        else if (u_mode == 5) col = sceneFractal(uv);
-        else if (u_mode == 6) col = sceneBlobTrack(uv);
-        else if (u_mode == 7) col = scenePointCloud(uv);
-        else if (u_mode == 8) col = sceneReaction(uv);
+        else if (u_mode == 1) col = sceneBlobTrack(uv);
+        else if (u_mode == 2) col = scenePointCloud(uv);
+        else if (u_mode == 3) col = sceneReaction(uv);
+        else if (u_mode == 4) col = sceneSynthwave(uv);
+        else if (u_mode == 5) col = sceneFerrofluid(uv);
+        else if (u_mode == 6) col = sceneTunnel(uv);
+        else if (u_mode == 7) col = sceneLiquid(uv);
+        else if (u_mode == 8) col = sceneFractal(uv);
         else col = sceneCustom(uv);
 
         // Змішування з власним Відео / Фото / Камерою (Media TOP)

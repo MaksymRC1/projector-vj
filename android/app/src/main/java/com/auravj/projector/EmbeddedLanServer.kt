@@ -253,7 +253,7 @@ class EmbeddedLanServer(
                     len = (((b3 and 0xFF) shl 8) or (b4 and 0xFF)).toLong()
                 } else if (len == 127L) {
                     val buf = ByteArray(8)
-                    if (input.read(buf) != 8) break
+                    if (!readFully(input, buf)) break
                     len = 0L
                     for (i in 0 until 8) {
                         len = (len shl 8) or ((buf[i].toInt() and 0xFF).toLong())
@@ -262,16 +262,13 @@ class EmbeddedLanServer(
 
                 val mask = ByteArray(4)
                 if (isMasked) {
-                    if (input.read(mask) != 4) break
+                    if (!readFully(input, mask)) break
                 }
 
+                if (len < 0 || len > 10 * 1024 * 1024) break // sanity limit 10MB
+
                 val payload = ByteArray(len.toInt())
-                var totalRead = 0
-                while (totalRead < len) {
-                    val count = input.read(payload, totalRead, len.toInt() - totalRead)
-                    if (count == -1) break
-                    totalRead += count
-                }
+                if (!readFully(input, payload)) break
 
                 if (isMasked) {
                     for (i in payload.indices) {
@@ -284,7 +281,7 @@ class EmbeddedLanServer(
 
                 // Opcode 0x9 = Ping -> відповідаємо Pong (0xA)
                 if (opcode == 0x9) {
-                    sendRawFrame(output, 0xA, payload)
+                    sendRawFrame(socket, 0xA, payload)
                     continue
                 }
 
@@ -302,13 +299,26 @@ class EmbeddedLanServer(
         }
     }
 
+    private fun readFully(input: InputStream, buffer: ByteArray, offset: Int = 0, length: Int = buffer.size): Boolean {
+        var total = 0
+        while (total < length) {
+            val count = input.read(buffer, offset + total, length - total)
+            if (count < 0) return false
+            total += count
+        }
+        return true
+    }
+
     private fun broadcastMessage(senderSocket: Socket, payload: ByteArray) {
         val frame = buildServerFrame(0x1, payload)
         for (client in wsClients) {
             if (client != senderSocket && !client.isClosed) {
                 try {
-                    client.getOutputStream().write(frame)
-                    client.getOutputStream().flush()
+                    synchronized(client) {
+                        val out = client.getOutputStream()
+                        out.write(frame)
+                        out.flush()
+                    }
                 } catch (e: Exception) {
                     wsClients.remove(client)
                 }
@@ -322,8 +332,11 @@ class EmbeddedLanServer(
         for (client in wsClients) {
             if (!client.isClosed) {
                 try {
-                    client.getOutputStream().write(frame)
-                    client.getOutputStream().flush()
+                    synchronized(client) {
+                        val out = client.getOutputStream()
+                        out.write(frame)
+                        out.flush()
+                    }
                 } catch (e: Exception) {}
             }
         }
@@ -352,9 +365,14 @@ class EmbeddedLanServer(
         return out.toByteArray()
     }
 
-    private fun sendRawFrame(output: OutputStream, opcode: Int, payload: ByteArray) {
+    private fun sendRawFrame(socket: Socket, opcode: Int, payload: ByteArray) {
         val frame = buildServerFrame(opcode, payload)
-        output.write(frame)
-        output.flush()
+        try {
+            synchronized(socket) {
+                val out = socket.getOutputStream()
+                out.write(frame)
+                out.flush()
+            }
+        } catch (e: Exception) {}
     }
 }

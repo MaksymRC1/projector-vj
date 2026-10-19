@@ -88,7 +88,12 @@ class MainActivity : AppCompatActivity() {
             ) {
                 // Якщо зовнішній сервер недоступний — відкриваємо власний вбудований сервер проектора
                 val myIp = getLocalIpAddress()
-                view?.loadUrl("http://localhost:3456/?view=projector&lan=$myIp:3456")
+                if (failingUrl?.contains("localhost:3456") == true) {
+                    // Якщо локальний сокет ще ініціалізується, відчиняємо локальні ассети напряму
+                    view?.loadUrl("file:///android_asset/index.html?view=projector&lan=$myIp:3456")
+                } else {
+                    view?.loadUrl("http://localhost:3456/?view=projector&lan=$myIp:3456")
+                }
             }
         }
 
@@ -335,12 +340,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var lastBackPressTime = 0L
+
     /**
-     * Меню налаштувань для пульта проектора (кнопка MENU / SETTINGS)
+     * Меню налаштувань для пульта проектора (кнопка MENU / SETTINGS) та обробка кнопки BACK
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS) {
             showServerSettingsDialog()
+            return true
+        }
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            webView.evaluateJavascript("window.onAndroidBackPressed ? window.onAndroidBackPressed() : false;") { result ->
+                val consumed = result == "true"
+                if (!consumed) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastBackPressTime < 2000) {
+                        finish()
+                    } else {
+                        lastBackPressTime = now
+                        Toast.makeText(this, "Натисніть НАЗАД ще раз для виходу", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
             return true
         }
         return super.onKeyDown(keyCode, event)

@@ -1468,21 +1468,81 @@ input[type="range"]::-webkit-slider-thumb {
   margin-bottom: 16px;
 }
 
+.qr-mode-switch {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--border-hairline);
+  margin-bottom: 12px;
+}
+
+.qr-mode-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.qr-mode-btn.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-primary);
+  box-shadow: var(--specular-top);
+}
+
+.copy-url-btn {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-hairline);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.copy-url-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.copy-url-btn.copied {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #10b981;
+}
+
 .qr-box {
-  width: 184px;
-  height: 184px;
+  width: 196px;
+  height: 196px;
   margin: 0 auto 14px;
   background: #fff;
-  padding: 10px;
+  padding: 8px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.qr-box svg,
 .qr-box img {
   width: 100%;
   height: 100%;
+  display: block;
 }
 
 .room-input-row {
@@ -2293,3 +2353,227 @@ input[type="range"]::-webkit-slider-thumb {
     min-height: 54px;
   }
 }
+
+/* ==========================================================================
+   11. АДАПТАЦІЯ ДЛЯ ПЛАНШЕТІВ / IPAD (680px - 1023px)
+   ========================================================================== */
+@media (min-width: 680px) and (max-width: 1023px) {
+  body[data-view="split"] .projector-stage {
+    height: 38dvh;
+    min-height: 220px;
+  }
+
+  body[data-view="remote"] .projector-stage {
+    width: 380px;
+    height: 214px;
+    margin: 10px auto;
+  }
+
+  .mobile-vj-deck {
+    padding: 12px 18px 24px;
+    gap: 12px;
+  }
+
+  #tabScenes.active {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  #tabScenes.active .preset-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  #tabScenes.active .vj-pad {
+    min-height: 72px;
+    padding: 10px 8px;
+  }
+
+  #tabScenes.active .xy-pad-wrapper {
+    height: 100%;
+    min-height: 240px;
+  }
+
+  .source-pills {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .fx-sliders-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  .chop-matrix {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .fx-row .fx-btn {
+    min-height: 50px;
+    font-size: 13px;
+  }
+}
+
+/* ==========================================================================
+   12. АДАПТАЦІЯ ДЛЯ СМАРТФОНІВ У ГОРИЗОНТАЛЬНІЙ ОРІЄНТАЦІЇ (LANDSCAPE DJ DECK)
+   ========================================================================== */
+@media (max-height: 520px) and (orientation: landscape) {
+  .top-bar {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 8px;
+  }
+
+  body.projector-hud-collapsed #topBar {
+    margin-top: -36px;
+  }
+
+  .brand-title {
+    font-size: 0.68rem;
+  }
+
+  .bpm-pill,
+  .room-pill,
+  .view-btn {
+    padding: 2px 6px;
+    font-size: 0.6rem;
+  }
+
+  .mobile-vj-deck {
+    padding: 6px 10px 14px;
+    gap: 6px;
+  }
+
+  .projector-remote-bar {
+    padding: 5px 10px;
+    margin-bottom: 6px;
+  }
+
+  .remote-bar-title {
+    font-size: 9.5px;
+  }
+
+  .remote-bar-sub {
+    font-size: 8.5px;
+  }
+
+  .btn-toggle-hud-remote,
+  .btn-apk-update-remote {
+    padding: 4px 8px;
+    font-size: 9.5px;
+  }
+
+  .source-strip {
+    padding: 6px 8px;
+  }
+
+  .strip-header {
+    margin-bottom: 4px;
+  }
+
+  .source-pills {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+
+  .src-pill {
+    padding: 4px 6px;
+    font-size: 0.62rem;
+  }
+
+  .studio-tabs {
+    gap: 4px;
+    padding: 2px;
+  }
+
+  .studio-tab {
+    padding: 4px 8px;
+    font-size: 0.64rem;
+  }
+
+  #tabScenes.active {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  #tabScenes.active .preset-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+
+  #tabScenes.active .vj-pad {
+    min-height: 48px;
+    padding: 5px 6px;
+    gap: 2px;
+  }
+
+  #tabScenes.active .vj-pad .pad-code {
+    font-size: 0.5rem;
+  }
+
+  #tabScenes.active .vj-pad .pad-name {
+    font-size: 0.64rem;
+  }
+
+  #tabScenes.active .vj-pad .pad-sub {
+    display: none;
+  }
+
+  #tabScenes.active .xy-pad-wrapper {
+    height: 100%;
+    min-height: 160px;
+  }
+
+  .fx-row {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    background: rgba(7, 7, 9, 0.95);
+    padding: 4px 0 2px;
+  }
+
+  .fx-row .fx-btn {
+    min-height: 38px;
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .fx-btn small {
+    display: none;
+  }
+
+  body[data-view="remote"] .projector-stage {
+    display: none !important;
+  }
+}
+
+/* ==========================================================================
+   13. АДАПТАЦІЯ ДЛЯ КОМПАКТНИХ ЕКРАНІВ ТЕЛЕФОНІВ (<= 380px, напр. iPhone SE)
+   ========================================================================== */
+@media (max-width: 380px) {
+  .vj-pad {
+    padding: 7px 6px;
+  }
+
+  .vj-pad .pad-name {
+    font-size: 0.68rem;
+  }
+
+  .vj-pad .pad-sub {
+    font-size: 0.5rem;
+  }
+
+  .fx-sliders-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .media-buttons-row {
+    grid-template-columns: 1fr;
+  }
+}
+

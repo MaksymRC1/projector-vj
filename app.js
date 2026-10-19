@@ -51,6 +51,44 @@ class AuraVJApp {
     this.setupPeerSyncHeartbeat();
     this.setupScreenKeepAlive();
 
+    // Кешуємо посилання на DOM елементи для усунення 600+ DOM-пошуків за секунду в loop()
+    this.meterEls = {
+      sub: document.getElementById("meterSub"),
+      bass: document.getElementById("meterBass"),
+      mid: document.getElementById("meterMid"),
+      high: document.getElementById("meterHigh"),
+    };
+    this.beatLedEl = document.getElementById("beatLed");
+    this.bpmDisplayEl = document.getElementById("bpmDisplay");
+    this.micLiveDotEl = document.getElementById("micLiveDot");
+    this.chopBarEls = {};
+    ["rgbSplit", "glitch", "kaleido", "edges", "feedback", "pixelate"].forEach((k) => {
+      this.chopBarEls[k] = document.getElementById(`chopBar_${k}`);
+    });
+
+    window.onAndroidBackPressed = () => {
+      const qrModal = document.getElementById("qrModal");
+      if (qrModal && !qrModal.hidden) {
+        qrModal.hidden = true;
+        return true;
+      }
+      const shortcutsModal = document.getElementById("shortcutsModal");
+      if (shortcutsModal && !shortcutsModal.hidden) {
+        shortcutsModal.hidden = true;
+        return true;
+      }
+      const proModal = document.getElementById("proModal");
+      if (proModal && !proModal.hidden) {
+        proModal.hidden = true;
+        return true;
+      }
+      if (this.projectorHudCollapsed) {
+        this.setProjectorHudCollapsed(false, true);
+        return true;
+      }
+      return false;
+    };
+
     // Запускаємо рендер-цикл одразу (навіть до першого кліку працює візуальне демо)
     this.lastFrame = performance.now();
     requestAnimationFrame((t) => this.loop(t));
@@ -889,10 +927,17 @@ class AuraVJApp {
     const rangeMix = document.getElementById("rangeMediaMix");
     const valMix = document.getElementById("val_mediaMix");
 
-    const updateMixUI = (pct) => {
+    const updateMixUI = (pct, broadcast = true) => {
       this.visualizer.mediaMix = pct / 100;
       if (rangeMix) rangeMix.value = String(pct);
       if (valMix) valMix.textContent = `${pct}%`;
+      if (broadcast) {
+        this.sync.send({
+          type: "mediaConfig",
+          mix: this.visualizer.mediaMix,
+          mode: this.visualizer.mediaBlendMode,
+        });
+      }
     };
 
     if (btnUpload && mediaInput) {
@@ -966,6 +1011,11 @@ class AuraVJApp {
           c.classList.toggle("active", c === chip)
         );
         this.visualizer.mediaBlendMode = Number(chip.dataset.mediaMode) || 0;
+        this.sync.send({
+          type: "mediaConfig",
+          mix: this.visualizer.mediaMix,
+          mode: this.visualizer.mediaBlendMode,
+        });
       });
     });
   }
@@ -995,33 +1045,51 @@ class AuraVJApp {
 
   setupXYPad() {
     const pad = document.getElementById("xyPad");
+    if (!pad) return;
     let isDragging = false;
 
     const updateFromEvent = (e) => {
       const rect = pad.getBoundingClientRect();
-      const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const y = Math.max(0, Math.min(1, 1.0 - (e.clientY - rect.top) / rect.height));
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const x = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+      const y = Math.max(0, Math.min(1, 1.0 - (clientY - rect.top) / Math.max(1, rect.height)));
       this.updateXYUI(x, y);
       this.visualizer.setXY(x, y);
       this.sync.send({ type: "xy", x, y });
     };
 
     pad.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
       isDragging = true;
-      pad.setPointerCapture(e.pointerId);
+      try {
+        pad.setPointerCapture(e.pointerId);
+      } catch {}
       updateFromEvent(e);
+      if (navigator.vibrate) navigator.vibrate(10);
     });
 
     pad.addEventListener("pointermove", (e) => {
       if (!isDragging) return;
+      e.preventDefault();
       updateFromEvent(e);
     });
 
-    const stopDrag = () => {
+    const stopDrag = (e) => {
+      if (!isDragging) return;
       isDragging = false;
+      if (e && typeof e.pointerId === "number") {
+        try {
+          pad.releasePointerCapture(e.pointerId);
+        } catch {}
+      }
     };
     pad.addEventListener("pointerup", stopDrag);
     pad.addEventListener("pointercancel", stopDrag);
+
+    // Блокуємо скрол екрана телефону при русі пальцем по тачпаду
+    pad.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+    pad.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
   }
 
   updateXYUI(x, y) {
@@ -1042,6 +1110,12 @@ class AuraVJApp {
     const btnFreeze = document.getElementById("fxFreeze");
     const btnColorDrop = document.getElementById("fxColorDrop");
 
+    const vibrate = (ms = 15) => {
+      if (navigator.vibrate) {
+        try { navigator.vibrate(ms); } catch {}
+      }
+    };
+
     // Блокуємо виділення тексту та системне меню iOS Safari при утриманні тактильних клавіш
     document.addEventListener("selectstart", (e) => {
       if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
@@ -1057,55 +1131,66 @@ class AuraVJApp {
 
     const setStrobe = (active) => {
       this.visualizer.fx.strobe = active;
-      btnStrobe.classList.toggle("active", active);
+      if (btnStrobe) btnStrobe.classList.toggle("active", active);
       this.sync.send({ type: "fx", effect: "strobe", active });
     };
-    btnStrobe.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      try {
-        btnStrobe.setPointerCapture(e.pointerId);
-      } catch {}
-      setStrobe(true);
-    });
-    btnStrobe.addEventListener("pointerup", () => setStrobe(false));
-    btnStrobe.addEventListener("pointerleave", () => setStrobe(false));
-    btnStrobe.addEventListener("pointercancel", () => setStrobe(false));
-    btnStrobe.addEventListener("touchend", () => setStrobe(false));
-    btnStrobe.addEventListener("touchcancel", () => setStrobe(false));
+    if (btnStrobe) {
+      btnStrobe.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        vibrate(25);
+        try {
+          btnStrobe.setPointerCapture(e.pointerId);
+        } catch {}
+        setStrobe(true);
+      });
+      btnStrobe.addEventListener("pointerup", () => setStrobe(false));
+      btnStrobe.addEventListener("pointerleave", () => setStrobe(false));
+      btnStrobe.addEventListener("pointercancel", () => setStrobe(false));
+      btnStrobe.addEventListener("touchend", () => setStrobe(false));
+      btnStrobe.addEventListener("touchcancel", () => setStrobe(false));
+    }
 
     const setFreeze = (active) => {
       this.visualizer.fx.freeze = active;
-      btnFreeze.classList.toggle("active", active);
+      if (btnFreeze) btnFreeze.classList.toggle("active", active);
       this.sync.send({ type: "fx", effect: "freeze", active });
     };
-    btnFreeze.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      try {
-        btnFreeze.setPointerCapture(e.pointerId);
-      } catch {}
-      setFreeze(true);
-    });
-    btnFreeze.addEventListener("pointerup", () => setFreeze(false));
-    btnFreeze.addEventListener("pointerleave", () => setFreeze(false));
-    btnFreeze.addEventListener("pointercancel", () => setFreeze(false));
-    btnFreeze.addEventListener("touchend", () => setFreeze(false));
-    btnFreeze.addEventListener("touchcancel", () => setFreeze(false));
-
-    btnShockwave.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      this.visualizer.triggerShockwave();
-      this.sync.send({ type: "fx", effect: "shockwave" });
-    });
-
-    btnColorDrop.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      this.visualizer.triggerColorDrop();
-      this.sync.send({
-        type: "fx",
-        effect: "colordrop",
-        colorShift: this.visualizer.colorShift,
+    if (btnFreeze) {
+      btnFreeze.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        vibrate(18);
+        try {
+          btnFreeze.setPointerCapture(e.pointerId);
+        } catch {}
+        setFreeze(!this.visualizer.fx.freeze);
       });
-    });
+    }
+
+    if (btnShockwave) {
+      btnShockwave.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        vibrate(22);
+        this.visualizer.triggerShockwave();
+        btnShockwave.classList.add("active");
+        setTimeout(() => btnShockwave.classList.remove("active"), 140);
+        this.sync.send({ type: "fx", effect: "shockwave" });
+      });
+    }
+
+    if (btnColorDrop) {
+      btnColorDrop.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        vibrate(18);
+        this.visualizer.triggerColorDrop();
+        btnColorDrop.classList.add("active");
+        setTimeout(() => btnColorDrop.classList.remove("active"), 140);
+        this.sync.send({
+          type: "fx",
+          effect: "colordrop",
+          colorShift: this.visualizer.colorShift,
+        });
+      });
+    }
   }
 
   /**
@@ -1148,7 +1233,18 @@ class AuraVJApp {
         ).filter((el) => el.checkVisibility && el.checkVisibility());
 
         const current = document.activeElement;
-        if (!candidates.includes(current)) return;
+        if (!candidates.includes(current)) {
+          const defaultTarget = container.querySelector(".active") || candidates[0];
+          if (defaultTarget) {
+            e.preventDefault();
+            candidates.forEach((c) =>
+              c.setAttribute("tabindex", c === defaultTarget ? "0" : "-1")
+            );
+            defaultTarget.focus();
+            defaultTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+          }
+          return;
+        }
 
         const currRect = current.getBoundingClientRect();
         const tolerance = 2;
@@ -1694,30 +1790,287 @@ class AuraVJApp {
     }
   }
 
+  generateQrSvg(text, opt = {}) {
+    const ecLevel = opt.ecLevel || "L";
+    const margin = opt.margin !== undefined ? opt.margin : 2;
+    const size = opt.size || 196;
+
+    const EXP = new Uint8Array(512);
+    const LOG = new Uint8Array(256);
+    let x = 1;
+    for (let i = 0; i < 255; i++) {
+      EXP[i] = x; EXP[i + 255] = x; LOG[x] = i;
+      x = (x << 1) ^ (x >= 128 ? 0x11D : 0);
+    }
+    const gfMul = (a, b) => (a === 0 || b === 0 ? 0 : EXP[LOG[a] + LOG[b]]);
+
+    const rsPoly = (n) => {
+      let p = [1];
+      for (let i = 0; i < n; i++) {
+        const next = new Array(p.length + 1).fill(0);
+        for (let j = 0; j < p.length; j++) {
+          next[j] ^= gfMul(p[j], EXP[i]);
+          next[j + 1] ^= p[j];
+        }
+        p = next;
+      }
+      return p;
+    };
+
+    const rsCalc = (data, numEc) => {
+      const gen = rsPoly(numEc);
+      const msg = new Array(data.length + numEc).fill(0);
+      for (let i = 0; i < data.length; i++) msg[i] = data[i];
+      for (let i = 0; i < data.length; i++) {
+        const c = msg[i];
+        if (c !== 0) {
+          for (let j = 0; j < gen.length; j++) msg[i + j] ^= gfMul(gen[j], c);
+        }
+      }
+      return msg.slice(data.length);
+    };
+
+    const V = [
+      null,
+      { v: 1, s: 21, dL: 19, ecL: 7, dM: 16, ecM: 10, a: [] },
+      { v: 2, s: 25, dL: 34, ecL: 10, dM: 28, ecM: 16, a: [6, 18] },
+      { v: 3, s: 29, dL: 55, ecL: 15, dM: 44, ecM: 26, a: [6, 22] },
+      { v: 4, s: 33, dL: 80, ecL: 20, dM: 64, ecM: 36, a: [6, 26] },
+      { v: 5, s: 37, dL: 108, ecL: 26, dM: 86, ecM: 48, a: [6, 30] },
+      { v: 6, s: 41, dL: 136, ecL: 36, dM: 108, ecM: 64, a: [6, 34] },
+      { v: 7, s: 45, dL: 156, ecL: 40, dM: 124, ecM: 72, a: [6, 22, 38] },
+    ];
+
+    const strBytes = [];
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      if (code < 128) strBytes.push(code);
+      else if (code < 2048) { strBytes.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F)); }
+      else { strBytes.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F)); }
+    }
+
+    let vi = null;
+    const isM = ecLevel === "M";
+    for (let i = 1; i < V.length; i++) {
+      const cap = isM ? V[i].dM : V[i].dL;
+      if (strBytes.length + 3 <= cap) { vi = V[i]; break; }
+    }
+    if (!vi) vi = V[V.length - 1];
+
+    const totalData = isM ? vi.dM : vi.dL;
+    const totalEc = isM ? vi.ecM : vi.ecL;
+
+    const bits = [0, 1, 0, 0];
+    const lenBits = 8;
+    for (let i = lenBits - 1; i >= 0; i--) bits.push((strBytes.length >> i) & 1);
+    for (const b of strBytes) {
+      for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
+    }
+    for (let i = 0; i < 4 && bits.length < totalData * 8; i++) bits.push(0);
+    while (bits.length % 8 !== 0) bits.push(0);
+
+    const dataBytes = [];
+    for (let i = 0; i < bits.length; i += 8) {
+      let b = 0;
+      for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j];
+      dataBytes.push(b);
+    }
+    let pad = 0;
+    while (dataBytes.length < totalData) {
+      dataBytes.push(pad % 2 === 0 ? 0xEC : 0x11);
+      pad++;
+    }
+
+    const ecBytes = rsCalc(dataBytes, totalEc);
+    const finalCodewords = dataBytes.concat(ecBytes);
+
+    const N = vi.s;
+    const mat = Array.from({ length: N }, () => new Int8Array(N).fill(-1));
+
+    const addFinder = (r0, c0) => {
+      for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+          const isBorder = r === 0 || r === 6 || c === 0 || c === 6;
+          const isCenter = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+          mat[r0 + r][c0 + c] = (isBorder || isCenter) ? 1 : 0;
+        }
+      }
+      for (let r = -1; r <= 7; r++) {
+        for (let c = -1; c <= 7; c++) {
+          if (r === -1 || r === 7 || c === -1 || c === 7) {
+            const rr = r0 + r, cc = c0 + c;
+            if (rr >= 0 && rr < N && cc >= 0 && cc < N) mat[rr][cc] = 0;
+          }
+        }
+      }
+    };
+    addFinder(0, 0);
+    addFinder(0, N - 7);
+    addFinder(N - 7, 0);
+
+    if (vi.a.length > 0) {
+      for (const r of vi.a) {
+        for (const c of vi.a) {
+          if (mat[r][c] !== -1) continue;
+          for (let dr = -2; dr <= 2; dr++) {
+            for (let dc = -2; dc <= 2; dc++) {
+              const isBorder = Math.abs(dr) === 2 || Math.abs(dc) === 2;
+              const isCenter = dr === 0 && dc === 0;
+              mat[r + dr][c + dc] = (isBorder || isCenter) ? 1 : 0;
+            }
+          }
+        }
+      }
+    }
+
+    for (let i = 8; i < N - 8; i++) {
+      if (mat[6][i] === -1) mat[6][i] = (i % 2 === 0) ? 1 : 0;
+      if (mat[i][6] === -1) mat[i][6] = (i % 2 === 0) ? 1 : 0;
+    }
+
+    mat[4 * vi.v + 9][8] = 1;
+
+    for (let i = 0; i < 9; i++) {
+      if (mat[8][i] === -1) mat[8][i] = 0;
+      if (mat[i][8] === -1) mat[i][8] = 0;
+      if (mat[8][N - 1 - i] === -1) mat[8][N - 1 - i] = 0;
+      if (mat[N - 1 - i][8] === -1) mat[N - 1 - i] = 0;
+    }
+
+    const allBits = [];
+    for (const b of finalCodewords) {
+      for (let i = 7; i >= 0; i--) allBits.push((b >> i) & 1);
+    }
+
+    let bitIdx = 0;
+    let dir = -1;
+    let col = N - 1;
+    while (col > 0) {
+      if (col === 6) col--;
+      const rows = dir === -1 ? Array.from({ length: N }, (_, i) => N - 1 - i) : Array.from({ length: N }, (_, i) => i);
+      for (const r of rows) {
+        for (const c of [col, col - 1]) {
+          if (mat[r][c] === -1) {
+            mat[r][c] = bitIdx < allBits.length ? allBits[bitIdx++] : 0;
+          }
+        }
+      }
+      dir = -dir;
+      col -= 2;
+    }
+
+    const maskFn = (r, c) => (r + c) % 2 === 0;
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        const isFinder = (r < 9 && c < 9) || (r < 9 && c >= N - 8) || (r >= N - 8 && c < 9);
+        const isTiming = (r === 6 || c === 6);
+        let isAlign = false;
+        if (vi.a.length > 0) {
+          for (const ar of vi.a) {
+            for (const ac of vi.a) {
+              if (Math.abs(r - ar) <= 2 && Math.abs(c - ac) <= 2) isAlign = true;
+            }
+          }
+        }
+        if (!isFinder && !isTiming && !isAlign) {
+          if (maskFn(r, c)) mat[r][c] ^= 1;
+        }
+      }
+    }
+
+    const formatInt = isM ? 0x5412 : 0x5C41;
+    const fBits = [];
+    for (let i = 14; i >= 0; i--) fBits.push((formatInt >> i) & 1);
+
+    mat[8][0] = fBits[0]; mat[8][1] = fBits[1]; mat[8][2] = fBits[2]; mat[8][3] = fBits[3];
+    mat[8][4] = fBits[4]; mat[8][5] = fBits[5]; mat[8][7] = fBits[6]; mat[8][8] = fBits[7];
+    mat[7][8] = fBits[8]; mat[5][8] = fBits[9]; mat[4][8] = fBits[10]; mat[3][8] = fBits[11];
+    mat[2][8] = fBits[12]; mat[1][8] = fBits[13]; mat[0][8] = fBits[14];
+
+    for (let i = 0; i < 7; i++) mat[8][N - 1 - i] = fBits[i];
+    for (let i = 0; i < 8; i++) mat[N - 8 + i][8] = fBits[7 + i];
+
+    const totalDim = N + margin * 2;
+    let paths = "";
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        if (mat[r][c] === 1) {
+          paths += `M${c + margin},${r + margin}h1v1h-1z `;
+        }
+      }
+    }
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalDim} ${totalDim}" width="${size}" height="${size}" style="border-radius:10px;background:#ffffff;display:block;margin:0 auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);"><path fill="#000000" d="${paths.trim()}"/></svg>`;
+  }
+
   renderQrModal() {
     const rawHost = this.sync.serverHost || (location.host || "192.168.0.40:3456");
     const ip = rawHost.split(":")[0];
     const httpsHost = `${ip}:3457`;
     const httpHost = `${ip}:3456`;
 
-    // Для пульта смартфона формуємо HTTPS посилання (порт 3457) для роботи мікрофона в Safari/Chrome
-    const remoteUrl = `https://${httpsHost}/?view=remote&room=${encodeURIComponent(this.sync.roomId)}`;
+    if (!this.qrMode) this.qrMode = "https";
+
+    const remoteHttpsUrl = `https://${httpsHost}/?view=remote&room=${encodeURIComponent(this.sync.roomId)}`;
+    const remoteHttpUrl = `http://${httpHost}/?view=remote&room=${encodeURIComponent(this.sync.roomId)}`;
     const projectorUrl = `http://${httpHost}/?view=projector&room=${encodeURIComponent(this.sync.roomId)}`;
+
+    const activeRemoteUrl = this.qrMode === "http" ? remoteHttpUrl : remoteHttpsUrl;
+
+    const btnHttps = document.getElementById("btnQrModeHttps");
+    const btnHttp = document.getElementById("btnQrModeHttp");
+    if (btnHttps && btnHttp) {
+      btnHttps.classList.toggle("active", this.qrMode === "https");
+      btnHttp.classList.toggle("active", this.qrMode === "http");
+
+      btnHttps.onclick = () => {
+        this.qrMode = "https";
+        this.renderQrModal();
+      };
+      btnHttp.onclick = () => {
+        this.qrMode = "http";
+        this.renderQrModal();
+      };
+    }
 
     const remoteUrlEl = document.getElementById("remoteUrlText");
     if (remoteUrlEl) {
       remoteUrlEl.innerHTML = `
-        <div style="margin-bottom:6px;"><strong>📱 Пульт (iPhone/Android з мікрофоном):</strong></div>
-        <div style="word-break:break-all;color:var(--neon);font-family:monospace;font-size:12px;margin-bottom:8px;">${remoteUrl}</div>
+        <div style="margin-bottom:6px;"><strong>${this.qrMode === "https" ? "📱 Пульт (HTTPS з мікрофоном):" : "📱 Пульт (HTTP швидкий старт):"}</strong></div>
+        <div style="word-break:break-all;color:var(--neon);font-family:monospace;font-size:12px;margin-bottom:8px;">${activeRemoteUrl}</div>
         <div style="opacity:0.75;font-size:11px;">📽️ Екран (Smart TV / Проектор): <code>${projectorUrl}</code></div>
       `;
     }
+
+    const btnCopy = document.getElementById("btnCopyRemoteUrl");
+    if (btnCopy) {
+      btnCopy.onclick = () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(activeRemoteUrl).then(() => {
+            btnCopy.textContent = "✅ СКОПІЙОВАНО!";
+            btnCopy.classList.add("copied");
+            setTimeout(() => {
+              btnCopy.textContent = "📋 СКОПІЮВАТИ ПОСИЛАННЯ";
+              btnCopy.classList.remove("copied");
+            }, 2500);
+          }).catch(() => {});
+        }
+      };
+    }
+
     const roomInput = document.getElementById("roomInput");
     if (roomInput) roomInput.value = this.sync.roomId;
+
+    // Генеруємо векторний QR-код 100% автономно офлайн без зовнішніх API
     const qrBox = document.getElementById("qrCodeBox");
-    const encoded = encodeURIComponent(remoteUrl);
     if (qrBox) {
-      qrBox.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR Code для підключення смартфона" />`;
+      try {
+        qrBox.innerHTML = this.generateQrSvg(activeRemoteUrl, { size: 196, ecLevel: "L" });
+      } catch (e) {
+        // Fallback на аварійний прямий тег, якщо DOM обмежений
+        const encoded = encodeURIComponent(activeRemoteUrl);
+        qrBox.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR Code" />`;
+      }
     }
   }
 
@@ -1892,8 +2245,44 @@ class AuraVJApp {
     } else if (msg.type === "proStatus") {
       this.setProStatus(!!msg.isPro, false);
     } else if (msg.type === "venueKeystone") {
-      if (msg.venueOverlay) this.visualizer.venueOverlay = msg.venueOverlay;
-      if (msg.keystone) this.visualizer.keystone = msg.keystone;
+      if (msg.venueOverlay) {
+        this.visualizer.venueOverlay = msg.venueOverlay;
+        const chkVenue = document.getElementById("chkVenueOverlay");
+        const inputTitle = document.getElementById("inputVenueTitle");
+        const inputSub = document.getElementById("inputVenueSub");
+        if (chkVenue) chkVenue.checked = !!msg.venueOverlay.enabled;
+        if (inputTitle && msg.venueOverlay.title !== undefined) inputTitle.value = msg.venueOverlay.title;
+        if (inputSub && msg.venueOverlay.subtitle !== undefined) inputSub.value = msg.venueOverlay.subtitle;
+      }
+      if (msg.keystone) {
+        this.visualizer.keystone = msg.keystone;
+        const rangeScale = document.getElementById("rangeKeystoneScale");
+        const valScale = document.getElementById("val_keystoneScale");
+        const rangeCrop = document.getElementById("rangeKeystoneCrop");
+        const valCrop = document.getElementById("val_keystoneCrop");
+        if (rangeScale && typeof msg.keystone.scale === "number") {
+          rangeScale.value = String(Math.round(msg.keystone.scale * 100));
+          if (valScale) valScale.textContent = `${rangeScale.value}%`;
+        }
+        if (rangeCrop && typeof msg.keystone.cropX === "number") {
+          rangeCrop.value = String(Math.round(msg.keystone.cropX * 100));
+          if (valCrop) valCrop.textContent = `${rangeCrop.value}%`;
+        }
+      }
+    } else if (msg.type === "mediaConfig") {
+      if (typeof msg.mix === "number") {
+        this.visualizer.mediaMix = msg.mix;
+        const rangeMix = document.getElementById("rangeMediaMix");
+        const valMix = document.getElementById("val_mediaMix");
+        if (rangeMix) rangeMix.value = String(Math.round(msg.mix * 100));
+        if (valMix) valMix.textContent = `${Math.round(msg.mix * 100)}%`;
+      }
+      if (typeof msg.mode === "number") {
+        this.visualizer.mediaBlendMode = msg.mode;
+        document.querySelectorAll("[data-media-mode]").forEach((c) => {
+          c.classList.toggle("active", Number(c.dataset.mediaMode) === msg.mode);
+        });
+      }
     } else if (msg.type === "installCustomEffect" && msg.effect) {
       this.installCustomEffect(msg.effect, true, true);
     } else if (msg.type === "mode") {
@@ -2040,9 +2429,8 @@ class AuraVJApp {
     this.visualizer.render(dspState, now);
 
     // Оновлюємо пульсацію активного мікрофона на пульті
-    const micDot = document.getElementById("micLiveDot");
-    if (micDot) {
-      micDot.classList.toggle(
+    if (this.micLiveDotEl) {
+      this.micLiveDotEl.classList.toggle(
         "live",
         this.audioStarted &&
           (this.dsp.activeSource === "mic" || this.dsp.activeSource === "screen")
@@ -2051,25 +2439,23 @@ class AuraVJApp {
 
     // Оновлюємо індикатори Audio-CHOP матриці
     for (const [key, val] of Object.entries(this.visualizer.effectivePostFx)) {
-      const bar = document.getElementById(`chopBar_${key}`);
+      const bar = this.chopBarEls[key];
       if (bar) {
         bar.style.width = `${Math.round(val * 100)}%`;
       }
     }
 
-    const beatLed = document.getElementById("beatLed");
-    if (beatLed) {
-      beatLed.classList.toggle("beat-hit", dspState.beatIntensity > 0.55);
+    if (this.beatLedEl) {
+      this.beatLedEl.classList.toggle("beat-hit", dspState.beatIntensity > 0.55);
     }
-    const bpmEl = document.getElementById("bpmDisplay");
-    if (bpmEl) {
-      bpmEl.textContent = `${dspState.bpm || 128} BPM`;
+    if (this.bpmDisplayEl) {
+      this.bpmDisplayEl.textContent = `${dspState.bpm || 128} BPM`;
     }
 
-    document.getElementById("meterSub").style.height = `${Math.max(10, dspState.subBass * 100)}%`;
-    document.getElementById("meterBass").style.height = `${Math.max(10, dspState.bass * 100)}%`;
-    document.getElementById("meterMid").style.height = `${Math.max(10, dspState.mid * 100)}%`;
-    document.getElementById("meterHigh").style.height = `${Math.max(10, dspState.high * 100)}%`;
+    if (this.meterEls.sub) this.meterEls.sub.style.height = `${Math.max(10, dspState.subBass * 100)}%`;
+    if (this.meterEls.bass) this.meterEls.bass.style.height = `${Math.max(10, dspState.bass * 100)}%`;
+    if (this.meterEls.mid) this.meterEls.mid.style.height = `${Math.max(10, dspState.mid * 100)}%`;
+    if (this.meterEls.high) this.meterEls.high.style.height = `${Math.max(10, dspState.high * 100)}%`;
   }
 }
 
