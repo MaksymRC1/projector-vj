@@ -49,7 +49,18 @@ class MainActivity : AppCompatActivity() {
         settings.allowContentAccess = true
 
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        webView.webViewClient = WebViewClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun onReceivedError(
+                view: WebView?,
+                errorCode: Int,
+                description: String?,
+                failingUrl: String?
+            ) {
+                if (failingUrl?.startsWith("https://") == true) {
+                    view?.loadUrl("file:///android_asset/index.html?view=projector")
+                }
+            }
+        }
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 request.grant(request.resources)
@@ -57,7 +68,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.addJavascriptInterface(AndroidAudioBridge(), "AndroidAudioBridge")
-        webView.loadUrl("file:///android_asset/index.html?view=projector")
+        webView.loadUrl("https://maksymrc1.github.io/projector-vj/index.html?view=projector")
 
         checkAndStartSystemAudio()
     }

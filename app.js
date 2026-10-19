@@ -1598,16 +1598,13 @@ class AuraVJApp {
         this.visualizer.triggerShockwave();
       }
     } else if (msg.type === "dspTelemetry") {
-      // Приймаємо аудіо-телеметрію з пульта як у режимі Проектора, так і у Split-режимі!
-      // Якщо на цьому пристрої не увімкнено власний мікрофон/файл/захоплення вкладки — слухаємо пульт
-      const hasDedicatedLocalInput =
+      // Приймаємо аудіо-телеметрію з пульта/ноутбука на Проектор та Split
+      // Ігноруємо тільки якщо на проекторі вручну запущено локальний мікрофон або аудіофайл
+      const hasLocalMicrophoneOrFile =
         this.audioStarted &&
-        (this.dsp.activeSource === "mic" ||
-          this.dsp.activeSource === "file" ||
-          this.dsp.activeSource === "screen" ||
-          this.dsp.activeSource === "native_android");
+        (this.dsp.activeSource === "mic" || this.dsp.activeSource === "file");
 
-      if (this.currentView !== "remote" && !hasDedicatedLocalInput) {
+      if (this.currentView !== "remote" && !hasLocalMicrophoneOrFile) {
         this.audioStarted = false;
         this.dsp.ingestRemoteTelemetry(msg.state);
       }
