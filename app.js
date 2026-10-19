@@ -1645,6 +1645,12 @@ class AuraVJApp {
     const text = document.getElementById("roomCodeText");
     if (!badge || !text) return;
 
+    const isConnected =
+      this.sync.cloudConnected ||
+      (this.sync.lanWs && this.sync.lanWs.readyState === WebSocket.OPEN);
+
+    badge.classList.toggle("online", isConnected);
+
     if (isLinked) {
       badge.classList.add("peer-linked");
       badge.classList.toggle("p2p-active", !!this.sync.p2pConnected);
@@ -1654,10 +1660,13 @@ class AuraVJApp {
     } else {
       badge.classList.remove("peer-linked");
       badge.classList.remove("p2p-active");
-      badge.title = `Кімната ${this.sync.roomId}: Очікування підключення другого пристрою`;
-      text.textContent = this.sync.p2pConnected
-        ? `${this.sync.roomId} ⚡`
-        : this.sync.roomId;
+      if (isConnected) {
+        badge.title = `Кімната ${this.sync.roomId}: Онлайн (${this.sync.connectedBrokerCount || 1} серверів). Очікуємо підключення іншого пристрою...`;
+        text.textContent = `${this.sync.roomId} 🟡`;
+      } else {
+        badge.title = `Кімната ${this.sync.roomId}: Підключення до сервера синхронізації...`;
+        text.textContent = `${this.sync.roomId} ⏳`;
+      }
     }
   }
 

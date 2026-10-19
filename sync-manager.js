@@ -39,14 +39,14 @@ class SyncManager {
     // 3. Локальний WebSocket
     this.lanWs = null;
 
-    // 4. Паралельний пул хмарних MQTT-брокерів (унеможливлює підключення пульта і проектора до різних серверів)
+    // 4. Паралельний пул перевірених хмарних MQTT-брокерів (EMQX + Mosquitto)
     this.brokers = [
       "wss://broker.emqx.io:8084/mqtt",
-      "wss://broker.hivemq.com:8884/mqtt",
       "wss://test.mosquitto.org:8081/mqtt",
     ];
     this.cloudConns = new Map();
     this.cloudConnected = false;
+    this.connectedBrokerCount = 0;
 
     if (this.bc) {
       this.bc.onmessage = (e) => {
@@ -145,9 +145,7 @@ class SyncManager {
    * щоб Пульт і Проектор гарантовано бачили один одного навіть якщо один із брокерів недоступний
    */
   connectCloudMqttMesh() {
-    // Підтримуємо паралельне з'єднання з першими 2 брокерами (EMQX + HiveMQ)
-    const activeBrokers = this.brokers.slice(0, 2);
-    activeBrokers.forEach((url, index) => {
+    this.brokers.forEach((url, index) => {
       this.ensureBrokerConnection(url, index);
     });
   }
@@ -215,15 +213,18 @@ class SyncManager {
   }
 
   updateCloudConnectedFlag() {
-    let anyConnected = false;
+    let count = 0;
     for (const conn of this.cloudConns.values()) {
       if (conn.connected && conn.ws && conn.ws.readyState === WebSocket.OPEN) {
-        anyConnected = true;
-        break;
+        count++;
       }
     }
-    const changed = this.cloudConnected !== anyConnected;
+    const anyConnected = count > 0;
+    const changed =
+      this.cloudConnected !== anyConnected ||
+      this.connectedBrokerCount !== count;
     this.cloudConnected = anyConnected;
+    this.connectedBrokerCount = count;
     if (changed) {
       this.notifyStatus();
     }
@@ -771,6 +772,8 @@ class SyncManager {
         connected:
           this.cloudConnected ||
           (this.lanWs && this.lanWs.readyState === WebSocket.OPEN),
+        connectedCount: this.connectedBrokerCount || 0,
+        isLan: this.lanWs && this.lanWs.readyState === WebSocket.OPEN,
         p2p: this.p2pConnected,
         roomId: this.roomId,
       });

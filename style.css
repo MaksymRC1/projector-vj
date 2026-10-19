@@ -169,7 +169,12 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
+  background: #f59e0b;
+}
+
+.room-pill.online.peer-linked::before {
   background: var(--accent-emerald);
+  box-shadow: 0 0 6px var(--accent-emerald);
 }
 
 .room-pill.peer-linked {
