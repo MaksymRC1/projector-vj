@@ -78,6 +78,18 @@
           </svg>
           <span>KEYS</span>
         </button>
+        <button
+          class="room-pill monitor-btn active"
+          id="btnToggleMonitor"
+          title="Сховати/показати Live Program Monitor на десктопі (Клавіша P)"
+        >
+          <svg class="ico" viewBox="0 0 24 24">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+          <span id="monitorBtnText">MONITOR</span>
+        </button>
       </div>
 
       <div class="view-switcher" role="tablist" aria-label="Режим екрана">
@@ -1041,6 +1053,10 @@
             <div class="shortcut-item">
               <kbd>M</kbd>
               <span>Mute / Монітор синтезатора</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>P</kbd>
+              <span>Сховати/показати Live Monitor прев'ю</span>
             </div>
             <div class="shortcut-item">
               <kbd>V</kbd>

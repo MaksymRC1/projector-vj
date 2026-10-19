@@ -30,6 +30,7 @@ class AuraVJApp {
     this.setupVideoRecorder();
     this.setupVenueAndKeystone();
     this.setupStudioTabs();
+    this.setupMonitorToggle();
     this.setupFilmoraFX();
     this.setupTouchDesignerCHOP();
     this.setupMediaTop();
@@ -480,25 +481,75 @@ class AuraVJApp {
   }
 
   /**
-   * Вкладки студії: Сцени & XY / Filmora FX / TouchDesigner CHOP Ноди / Відео & Камера
+   * Вкладки студії: Сцени & XY / Filmora FX / TouchDesigner CHOP Ноди / Відео & Камера / Консоль (Все)
    */
   setupStudioTabs() {
     const deck = document.getElementById("mobileDeck");
     const tabs = document.querySelectorAll(".studio-tab");
     const panels = document.querySelectorAll(".studio-panel");
+
+    const activateTab = (targetId) => {
+      tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === targetId));
+      if (targetId === "tabAll") {
+        if (deck) deck.classList.add("console-all-active");
+        panels.forEach((p) => p.classList.add("active"));
+      } else {
+        if (deck) deck.classList.remove("console-all-active");
+        panels.forEach((p) => p.classList.toggle("active", p.id === targetId));
+      }
+    };
+
     tabs.forEach((tab) => {
       tab.addEventListener("click", () => {
-        const targetId = tab.dataset.tab;
-        tabs.forEach((t) => t.classList.toggle("active", t === tab));
-        if (targetId === "tabAll") {
-          if (deck) deck.classList.add("console-all-active");
-          panels.forEach((p) => p.classList.add("active"));
-        } else {
-          if (deck) deck.classList.remove("console-all-active");
-          panels.forEach((p) => p.classList.toggle("active", p.id === targetId));
-        }
+        activateTab(tab.dataset.tab);
       });
     });
+
+    // На десктопі (>= 1024px) за замовчуванням активуємо повноцінний VJ-пульт "Консоль (Все)"
+    if (window.innerWidth >= 1024) {
+      activateTab("tabAll");
+    }
+
+    let lastWidth = window.innerWidth;
+    window.addEventListener("resize", () => {
+      const isDesktopNow = window.innerWidth >= 1024;
+      const wasDesktop = lastWidth >= 1024;
+      if (isDesktopNow !== wasDesktop) {
+        lastWidth = window.innerWidth;
+        if (isDesktopNow) {
+          activateTab("tabAll");
+        } else {
+          activateTab("tabScenes");
+        }
+      }
+    });
+  }
+
+  /**
+   * Перемикання Live Program Monitor на пульті (сховати/показати)
+   */
+  toggleProgramMonitor() {
+    const stage = document.getElementById("projectorStage");
+    const btn = document.getElementById("btnToggleMonitor");
+    if (!stage) return;
+    stage.classList.toggle("monitor-hidden");
+    const isHidden = stage.classList.contains("monitor-hidden");
+    if (btn) {
+      btn.classList.toggle("active", !isHidden);
+      const txt = btn.querySelector("#monitorBtnText");
+      if (txt) txt.textContent = isHidden ? "MONITOR OFF" : "MONITOR";
+    }
+    setTimeout(() => this.visualizer?.onResize(), 60);
+  }
+
+  /**
+   * Керування кнопкою Live Program Monitor у верхній панелі
+   */
+  setupMonitorToggle() {
+    const btn = document.getElementById("btnToggleMonitor");
+    if (btn) {
+      btn.addEventListener("click", () => this.toggleProgramMonitor());
+    }
   }
 
   /**
@@ -1230,6 +1281,13 @@ class AuraVJApp {
           chk.checked = !chk.checked;
           chk.dispatchEvent(new Event("change"));
         }
+        return;
+      }
+
+      // Перемикання Live Program Monitor прев'ю на пульті: P
+      if (k === "p") {
+        e.preventDefault();
+        this.toggleProgramMonitor();
         return;
       }
 

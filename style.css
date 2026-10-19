@@ -197,6 +197,12 @@ body {
   color: #ff8a65;
 }
 
+.monitor-btn.active {
+  border-color: rgba(255, 87, 34, 0.45);
+  background: rgba(255, 87, 34, 0.14);
+  color: #ff8a65;
+}
+
 .view-switcher {
   display: flex;
   gap: 2px;
@@ -1722,45 +1728,136 @@ input[type="range"]::-webkit-slider-thumb {
     border-left: 1px solid rgba(255, 255, 255, 0.04);
   }
 
-  /* 7. ДЕСКТОП РОЗКЛАДКА: REMOTE РЕЖИМ (КОНСОЛЬНИЙ ПУЛЬТ) */
+  /* 7. ДЕСКТОП РОЗКЛАДКА: REMOTE РЕЖИМ (ПРОФЕСІЙНИЙ VJ WORKSTATION) */
+  body[data-view="remote"] {
+    background: #08080c;
+  }
+
   body[data-view="remote"] .projector-stage {
-    height: 80px;
-    min-height: 80px;
+    width: 420px;
+    max-width: calc(100vw - 48px);
+    height: 236px;
+    aspect-ratio: 16 / 9;
+    min-height: 0 !important;
+    margin: 14px auto 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 87, 34, 0.2);
+    background: #000000;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  body[data-view="remote"] .projector-stage::before {
+    content: "PROGRAM OUT · 1080p60";
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    z-index: 10;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #ff8a65;
+    background: rgba(10, 10, 15, 0.82);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 87, 34, 0.4);
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+  }
+
+  body[data-view="remote"] .projector-stage #dspHud {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    bottom: auto;
+    left: auto;
+    z-index: 10;
+    background: rgba(10, 10, 15, 0.82);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 4px 6px;
+    pointer-events: none;
+  }
+
+  body[data-view="remote"] .projector-stage.monitor-hidden {
+    display: none !important;
   }
 
   body[data-view="remote"] .mobile-vj-deck {
-    max-width: 1380px;
+    max-width: 1540px;
     width: 100%;
     margin: 0 auto;
-    padding: 16px 24px 32px;
+    padding: 12px 24px 36px;
+    flex: 1;
+    overflow-y: auto;
   }
 
-  /* 8. ДЕСКТОП-ВКЛАДКА "СЦЕНИ & XY": ДВОКОЛОНКОВИЙ ІНСТРУМЕНТ */
+  /* 8. ДЕСКТОП-ВКЛАДКА "СЦЕНИ & XY" В ОДИНОЧНОМУ РЕЖИМІ (ПОВНЕ ЗАПОВНЕННЯ ЕКРАНА) */
   #mobileDeck:not(.console-all-active) #tabScenes.active {
     display: grid;
     grid-template-columns: 1.25fr 1fr;
-    gap: 12px;
+    gap: 18px;
     align-items: stretch;
+    min-height: calc(100vh - 420px);
   }
 
   #mobileDeck:not(.console-all-active) #tabScenes.active .preset-grid {
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    gap: 12px;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabScenes.active .vj-pad {
+    min-height: 95px;
+    padding: 16px 12px;
   }
 
   #mobileDeck:not(.console-all-active) #tabScenes.active .xy-pad-wrapper {
-    height: auto;
-    min-height: 230px;
+    height: 100%;
+    min-height: 420px;
   }
 
-  /* 9. ДЕСКТОП-РЕЖИМ "КОНСОЛЬ (ВСЕ)": ОДНОЧАСНИЙ ВИВІД УСІХ 4 РЕКІВ */
+  #mobileDeck:not(.console-all-active) #tabFilmoraFx.active {
+    max-width: 1280px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabFilmoraFx.active .fx-sliders-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    padding: 14px 0;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabTdNodes.active {
+    max-width: 1280px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabTdNodes.active .chop-matrix {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px 18px;
+  }
+
+  #mobileDeck:not(.console-all-active) #tabMediaTop.active {
+    max-width: 1000px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* 9. ДЕСКТОП-РЕЖИМ "КОНСОЛЬ (ВСЕ)": 2-КОЛОНОЧНИЙ VJ ПУЛЬТ (1024px - 1399px) */
   .desktop-only-tab {
     display: inline-flex !important;
   }
 
   #mobileDeck.console-all-active .studio-tab[data-tab="tabAll"] {
     background: rgba(255, 87, 34, 0.16);
-    border-color: rgba(255, 87, 34, 0.4);
+    border-color: rgba(255, 87, 34, 0.45);
     color: #ff8a65;
     box-shadow: var(--specular-top);
   }
@@ -1773,8 +1870,11 @@ input[type="range"]::-webkit-slider-thumb {
   #mobileDeck.console-all-active {
     display: grid;
     grid-template-columns: 1.15fr 1fr;
-    gap: 14px 16px;
+    gap: 16px 18px;
     align-items: start;
+    max-width: 1440px;
+    margin: 0 auto;
+    width: 100%;
   }
 
   #mobileDeck.console-all-active > .source-strip {
@@ -1789,12 +1889,22 @@ input[type="range"]::-webkit-slider-thumb {
     grid-column: 1;
     display: flex !important;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .preset-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .vj-pad {
+    min-height: 80px;
+    padding: 10px 8px;
   }
 
   #mobileDeck.console-all-active > #tabScenes .xy-pad-wrapper {
-    height: 140px;
-    min-height: 140px;
+    height: 240px;
+    min-height: 240px;
   }
 
   #mobileDeck.console-all-active > #tabFilmoraFx {
@@ -1816,26 +1926,107 @@ input[type="range"]::-webkit-slider-thumb {
     z-index: 30;
     background: rgba(7, 7, 9, 0.94);
     backdrop-filter: blur(20px);
-    padding-top: 10px;
-    padding-bottom: 4px;
+    padding: 12px 0 6px;
     border-top: 1px solid var(--border-hairline);
+  }
+
+  #mobileDeck.console-all-active > .fx-row .fx-btn {
+    min-height: 52px;
+    font-size: 13.5px;
+    font-weight: 700;
   }
 }
 
-/* 10. АДАПТАЦІЯ ДЛЯ ШИРОКИХ МОНІТОРІВ (>= 1400px) */
+/* 10. АДАПТАЦІЯ ДЛЯ ШИРОКИХ ДЕСКТОП-МОНІТОРІВ (>= 1400px): 3-КОЛОНОЧНИЙ VJ WORKSTATION */
 @media (min-width: 1400px) {
-  .fx-sliders-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  body[data-view="remote"] .mobile-vj-deck {
+    max-width: 1720px;
+    padding: 14px 28px 40px;
   }
 
-  .chop-matrix {
-    display: grid;
+  #mobileDeck.console-all-active {
+    grid-template-columns: 1.15fr 1.25fr 1.05fr;
+    gap: 16px 20px;
+    align-items: start;
+    max-width: 1720px;
+  }
+
+  #mobileDeck.console-all-active > .source-strip {
+    grid-column: 1 / -1;
+  }
+
+  #mobileDeck.console-all-active > .studio-tabs {
+    grid-column: 1 / -1;
+  }
+
+  /* КОЛОНКА 1: 9 СЦЕН ТА XY ТАЧПАД */
+  #mobileDeck.console-all-active > #tabScenes {
+    grid-column: 1;
+    display: flex !important;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .preset-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 9px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .vj-pad {
+    min-height: 84px;
+    padding: 12px 10px;
+  }
+
+  #mobileDeck.console-all-active > #tabScenes .xy-pad-wrapper {
+    height: 280px;
+    min-height: 280px;
+  }
+
+  /* КОЛОНКА 2: FILMORA FX РЕК ТА СЛАЙДЕРИ */
+  #mobileDeck.console-all-active > #tabFilmoraFx {
+    grid-column: 2;
+    display: flex !important;
+  }
+
+  #mobileDeck.console-all-active > #tabFilmoraFx .fx-studio-card {
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  #mobileDeck.console-all-active > #tabFilmoraFx .fx-sliders-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px 12px;
+    gap: 12px;
   }
 
-  .chop-row {
-    grid-template-columns: 110px 1fr 65px;
+  /* КОЛОНКА 3: CHOP ROUTER ТА MEDIA TOP ВХІД */
+  #mobileDeck.console-all-active > #tabTdNodes {
+    grid-column: 3;
+    display: flex !important;
+  }
+
+  #mobileDeck.console-all-active > #tabTdNodes .td-patch-card {
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  #mobileDeck.console-all-active > #tabTdNodes .chop-matrix {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  #mobileDeck.console-all-active > #tabMediaTop {
+    grid-column: 3;
+    display: flex !important;
+  }
+
+  #mobileDeck.console-all-active > #tabMediaTop .media-top-card {
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  /* НИЖНЯ ПАНЕЛЬ МАСТЕР-ТРИГЕРІВ */
+  #mobileDeck.console-all-active > .fx-row {
+    grid-column: 1 / -1;
   }
 
   .source-pills {
@@ -1844,6 +2035,7 @@ input[type="range"]::-webkit-slider-thumb {
   }
 
   .fx-btn {
-    padding: 10px 14px;
+    padding: 12px 16px;
+    min-height: 54px;
   }
 }
