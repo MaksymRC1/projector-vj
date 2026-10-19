@@ -18,8 +18,17 @@ class SyncManager {
     this.lanWs = null;
     this.cloudWs = null;
     this.pingInterval = null;
+    this.connectTimeout = null;
     this.cloudConnected = false;
     this.lastTelemetrySent = 0;
+
+    // Список надійних WSS MQTT-брокерів з автоматичним перемиканням (Multi-Broker Failover)
+    this.brokers = [
+      "wss://broker.emqx.io:8084/mqtt",
+      "wss://broker.hivemq.com:8884/mqtt",
+      "wss://test.mosquitto.org:8081/mqtt",
+    ];
+    this.brokerIndex = 0;
 
     if (this.bc) {
       this.bc.onmessage = (e) => {
@@ -29,6 +38,16 @@ class SyncManager {
 
     this.connectLanWebSocket();
     this.connectCloudMqtt();
+
+    // Автоматичне відновлення зв'язку після розблокування екрана iPhone або зміни мережі
+    window.addEventListener("online", () => {
+      if (!this.cloudConnected) this.connectCloudMqtt();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && !this.cloudConnected) {
+        this.connectCloudMqtt();
+      }
+    });
   }
 
   initRoomId() {
@@ -75,14 +94,28 @@ class SyncManager {
 
   /**
    * 1. Хмарна синхронізація через легкий бінарний MQTT 3.1.1 over WSS
-   * Дозволяє з'єднати iPhone та Android-проектор з різних мереж без серверів!
+   * Дозволяє з'єднати iPhone та Android-проектор з різних мереж із резервуванням брокерів!
    */
   connectCloudMqtt() {
-    const brokerUrl = "wss://broker.emqx.io:8084/mqtt";
+    const brokerUrl = this.brokers[this.brokerIndex % this.brokers.length];
+    clearTimeout(this.connectTimeout);
     try {
+      if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN) {
+        this.cloudWs.close();
+      }
       const ws = new WebSocket(brokerUrl, "mqtt");
       ws.binaryType = "arraybuffer";
       this.cloudWs = ws;
+
+      // Якщо брокер не відповів за 4.5 сек — перемикаємось на резервний
+      this.connectTimeout = setTimeout(() => {
+        if (!this.cloudConnected && this.cloudWs === ws) {
+          this.brokerIndex = (this.brokerIndex + 1) % this.brokers.length;
+          try {
+            ws.close();
+          } catch {}
+        }
+      }, 4500);
 
       ws.onopen = () => {
         // Відправляємо MQTT CONNECT пакет
@@ -96,6 +129,7 @@ class SyncManager {
 
         if (packetType === 2) {
           // CONNACK -> підписуємось на топік кімнати
+          clearTimeout(this.connectTimeout);
           this.cloudConnected = true;
           ws.send(this.buildMqttSubscribePacket(this.getTopic()));
           this.notifyStatus();
@@ -116,12 +150,17 @@ class SyncManager {
       };
 
       ws.onclose = () => {
+        const wasConnected = this.cloudConnected;
         this.cloudConnected = false;
         clearInterval(this.pingInterval);
+        clearTimeout(this.connectTimeout);
         this.notifyStatus();
+        if (!wasConnected) {
+          this.brokerIndex = (this.brokerIndex + 1) % this.brokers.length;
+        }
         setTimeout(() => {
           if (this.cloudWs === ws) this.connectCloudMqtt();
-        }, 4000);
+        }, 2500);
       };
 
       ws.onerror = () => {};

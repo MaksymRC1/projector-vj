@@ -13,10 +13,22 @@ class AuraVJApp {
     this.hudTimeout = null;
     this.audioStarted = false;
     this.cameraStream = null;
+    this.wakeLock = null;
+    this.mediaRecorder = null;
+    this.recordedChunks = [];
     this.userPresets = this.loadUserPresets();
+
+    // Комерційна модель: 4 сцени у FREE, 5 преміум-сцен у PRO
+    this.proScenes = ["blobtrack", "pointcloud", "reaction", "ferrofluid", "fractal"];
+    this.isPro = this.loadProStatus();
+    this.visualizer.isPro = this.isPro;
+    this.visualizer.roomId = this.sync.roomId;
 
     this.initUrlParams();
     this.setupUI();
+    this.setupProLicensing();
+    this.setupVideoRecorder();
+    this.setupVenueAndKeystone();
     this.setupStudioTabs();
     this.setupFilmoraFX();
     this.setupTouchDesignerCHOP();
@@ -26,10 +38,80 @@ class AuraVJApp {
     this.loadSavedCustomEffects();
     this.setupSpatialNavigation();
     this.setupAutoHideHud();
+    this.requestScreenWakeLock();
 
     // Запускаємо рендер-цикл одразу (навіть до першого кліку працює візуальне демо)
     this.lastFrame = performance.now();
     requestAnimationFrame((t) => this.loop(t));
+  }
+
+  loadProStatus() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("pro") === "1") {
+      try {
+        localStorage.setItem("aura_vj_pro_active", "true");
+      } catch {}
+      return true;
+    }
+    try {
+      return localStorage.getItem("aura_vj_pro_active") === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  setProStatus(active, broadcast = true) {
+    this.isPro = !!active;
+    this.visualizer.isPro = this.isPro;
+    try {
+      localStorage.setItem("aura_vj_pro_active", this.isPro ? "true" : "false");
+    } catch {}
+    this.updateProUI();
+    if (broadcast) {
+      this.sync.send({ type: "proStatus", isPro: this.isPro });
+    }
+  }
+
+  updateProUI() {
+    const badge = document.getElementById("btnProBadge");
+    const badgeText = document.getElementById("proBadgeText");
+    const demoBtn = document.getElementById("btnInstantProDemo");
+    const desc = document.getElementById("proModalStatusDesc");
+
+    if (badge) badge.classList.toggle("is-pro", this.isPro);
+    if (badgeText) badgeText.textContent = this.isPro ? "💎 PRO" : "FREE";
+
+    document.querySelectorAll(".vj-pad[data-mode]").forEach((pad) => {
+      const mode = pad.dataset.mode;
+      const locked = !this.isPro && this.proScenes.includes(mode);
+      pad.classList.toggle("pro-locked", locked);
+    });
+
+    if (demoBtn) {
+      demoBtn.textContent = this.isPro
+        ? "🔄 Перемкнути назад у FREE Режим (для тесту)"
+        : "⚡ Увімкнути PRO Режим (Тестова Активація в 1 клік)";
+    }
+    if (desc) {
+      desc.textContent = this.isPro
+        ? "✅ Ліцензія AURA VJ PRO активна! Всі 9 сцен, B2B-вивіска, Keystone-маска та FX Lab розблоковані."
+        : "Розблокуйте всі 9 TouchDesigner сцен, 6-шаровий Filmora FX стек, B2B-вивіску для закладів, Keystone-маску та приберіть водяний знак.";
+    }
+  }
+
+  async requestScreenWakeLock() {
+    if ("wakeLock" in navigator) {
+      try {
+        this.wakeLock = await navigator.wakeLock.request("screen");
+      } catch {}
+    }
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState === "visible" && "wakeLock" in navigator) {
+        try {
+          this.wakeLock = await navigator.wakeLock.request("screen");
+        } catch {}
+      }
+    });
   }
 
   initUrlParams() {
@@ -51,6 +133,15 @@ class AuraVJApp {
         this.highlightSourceButton("native_android");
       }
       this.dsp.ingestNativeAndroidBins(binsArray);
+    };
+
+    // Автоматичний fallback, якщо Android 12+ DRM блокує Visualizer(0)
+    window.onAndroidAudioFallback = (reason) => {
+      console.warn("Android Visualizer(0) fallback:", reason);
+      if (this.dsp.activeSource === "native_android") {
+        this.ensureAudioStarted("mic");
+        this.highlightSourceButton("mic");
+      }
     };
   }
 
@@ -126,6 +217,11 @@ class AuraVJApp {
     });
 
     const selectMode = (mode) => {
+      if (!this.isPro && this.proScenes.includes(mode)) {
+        const proModal = document.getElementById("proModal");
+        if (proModal) proModal.hidden = false;
+        return;
+      }
       this.visualizer.setMode(mode);
       this.highlightModeButtons(mode);
       this.sync.send({ type: "mode", mode });
@@ -154,6 +250,7 @@ class AuraVJApp {
         const val = document.getElementById("roomInput").value.trim();
         if (val) {
           this.sync.setRoomId(val);
+          this.visualizer.roomId = this.sync.roomId;
           this.renderQrModal();
         }
       });
@@ -165,6 +262,167 @@ class AuraVJApp {
       } else {
         document.exitFullscreen().catch(() => {});
       }
+    });
+  }
+
+  /**
+   * Комерційна система ліцензування AURA VJ PRO
+   */
+  setupProLicensing() {
+    this.updateProUI();
+    const proModal = document.getElementById("proModal");
+    const btnProBadge = document.getElementById("btnProBadge");
+    const btnClosePro = document.getElementById("btnCloseProModal");
+    const btnActivateKey = document.getElementById("btnActivateKey");
+    const btnInstantPro = document.getElementById("btnInstantProDemo");
+    const keyInput = document.getElementById("proLicenseInput");
+
+    if (btnProBadge && proModal) {
+      btnProBadge.addEventListener("click", () => {
+        proModal.hidden = false;
+      });
+    }
+    if (btnClosePro && proModal) {
+      btnClosePro.addEventListener("click", () => {
+        proModal.hidden = true;
+      });
+    }
+    if (btnInstantPro) {
+      btnInstantPro.addEventListener("click", () => {
+        this.setProStatus(!this.isPro, true);
+      });
+    }
+    if (btnActivateKey && keyInput) {
+      btnActivateKey.addEventListener("click", () => {
+        const val = keyInput.value.trim().toUpperCase();
+        if (val.startsWith("AURA-") || val.startsWith("VIP-") || val.length >= 6) {
+          this.setProStatus(true, true);
+          keyInput.value = "";
+          if (proModal) proModal.hidden = true;
+        } else {
+          alert("Введіть дійсний ключ (наприклад, AURA-PRO-2026) або натисніть кнопку тестової активації нижче.");
+        }
+      });
+    }
+    document.querySelectorAll(".pro-plan-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        if (keyInput) keyInput.value = "AURA-PRO-2026";
+        this.setProStatus(true, true);
+      });
+    });
+  }
+
+  /**
+   * Вбудований 60 FPS відео-рекордер (WebGL + Audio) для TikTok / Instagram Reels
+   */
+  setupVideoRecorder() {
+    const btnRec = document.getElementById("btnRecordVideo");
+    const recText = document.getElementById("recBtnText");
+    if (!btnRec || !this.canvas) return;
+
+    btnRec.addEventListener("click", () => {
+      if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
+        this.mediaRecorder.stop();
+        return;
+      }
+
+      try {
+        const canvasStream = this.canvas.captureStream(60);
+        const tracks = [...canvasStream.getVideoTracks()];
+
+        if (this.dsp && this.dsp.ctx && this.dsp.masterGain) {
+          try {
+            const dest = this.dsp.ctx.createMediaStreamDestination();
+            this.dsp.masterGain.connect(dest);
+            tracks.push(...dest.stream.getAudioTracks());
+          } catch {}
+        }
+
+        const combinedStream = new MediaStream(tracks);
+        const mimeTypes = [
+          "video/mp4;codecs=avc1",
+          "video/webm;codecs=vp9,opus",
+          "video/webm;codecs=vp8,opus",
+          "video/webm",
+        ];
+        const mimeType = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) || "";
+
+        this.recordedChunks = [];
+        this.mediaRecorder = mimeType
+          ? new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 8000000 })
+          : new MediaRecorder(combinedStream);
+
+        this.mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) this.recordedChunks.push(e.data);
+        };
+
+        this.mediaRecorder.onstop = () => {
+          btnRec.classList.remove("recording");
+          if (recText) recText.textContent = "REC";
+          const blob = new Blob(this.recordedChunks, {
+            type: this.mediaRecorder.mimeType || "video/webm",
+          });
+          const ext = (this.mediaRecorder.mimeType || "").includes("mp4") ? "mp4" : "webm";
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `aura-vj-reel-${Date.now()}.${ext}`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        };
+
+        this.mediaRecorder.start(200);
+        btnRec.classList.add("recording");
+        if (recText) recText.textContent = "STOP";
+      } catch (err) {
+        alert(`Запис відео не підтримується у цьому браузері: ${err.message}`);
+      }
+    });
+  }
+
+  /**
+   * B2B Вивіска для барів/івентів + Keystone-маска стіни проектора
+   */
+  setupVenueAndKeystone() {
+    const chkVenue = document.getElementById("chkVenueOverlay");
+    const inputTitle = document.getElementById("inputVenueTitle");
+    const inputSub = document.getElementById("inputVenueSub");
+    const rangeScale = document.getElementById("rangeKeystoneScale");
+    const valScale = document.getElementById("val_keystoneScale");
+    const rangeCrop = document.getElementById("rangeKeystoneCrop");
+    const valCrop = document.getElementById("val_keystoneCrop");
+
+    const syncVenueAndKeystone = () => {
+      if (!this.isPro && chkVenue && chkVenue.checked) {
+        chkVenue.checked = false;
+        const proModal = document.getElementById("proModal");
+        if (proModal) proModal.hidden = false;
+        return;
+      }
+      this.visualizer.venueOverlay = {
+        enabled: chkVenue ? chkVenue.checked : false,
+        title: inputTitle ? inputTitle.value.trim() : "",
+        subtitle: inputSub ? inputSub.value.trim() : "",
+      };
+      this.visualizer.keystone = {
+        scale: rangeScale ? Number(rangeScale.value) / 100 : 1.0,
+        cropX: rangeCrop ? Number(rangeCrop.value) / 100 : 0.0,
+        cropY: rangeCrop ? Number(rangeCrop.value) / 100 : 0.0,
+      };
+      if (valScale && rangeScale) valScale.textContent = `${rangeScale.value}%`;
+      if (valCrop && rangeCrop) valCrop.textContent = `${rangeCrop.value}%`;
+
+      this.sync.send({
+        type: "venueKeystone",
+        venueOverlay: this.visualizer.venueOverlay,
+        keystone: this.visualizer.keystone,
+      });
+    };
+
+    [chkVenue, inputTitle, inputSub, rangeScale, rangeCrop].forEach((el) => {
+      if (!el) return;
+      el.addEventListener("input", syncVenueAndKeystone);
+      el.addEventListener("change", syncVenueAndKeystone);
     });
   }
 
@@ -860,14 +1118,22 @@ class AuraVJApp {
       const badge = document.getElementById("btnRoomBadge");
       const text = document.getElementById("roomCodeText");
       const studioBtn = document.getElementById("btnOpenStudio");
-      if (text && msg.roomId) text.textContent = msg.roomId;
+      if (text && msg.roomId) {
+        text.textContent = msg.roomId;
+        this.visualizer.roomId = msg.roomId;
+      }
       if (badge) badge.classList.toggle("online", !!msg.connected);
       if (studioBtn && msg.roomId) {
         studioBtn.href = `studio.html?room=${encodeURIComponent(msg.roomId)}`;
       }
       return;
     }
-    if (msg.type === "installCustomEffect" && msg.effect) {
+    if (msg.type === "proStatus") {
+      this.setProStatus(!!msg.isPro, false);
+    } else if (msg.type === "venueKeystone") {
+      if (msg.venueOverlay) this.visualizer.venueOverlay = msg.venueOverlay;
+      if (msg.keystone) this.visualizer.keystone = msg.keystone;
+    } else if (msg.type === "installCustomEffect" && msg.effect) {
       this.installCustomEffect(msg.effect, true, true);
     } else if (msg.type === "mode") {
       this.visualizer.setMode(msg.mode);

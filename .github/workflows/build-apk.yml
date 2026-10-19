@@ -34,14 +34,14 @@ jobs:
       - name: Copy WebGL & DSP Assets into Android App
         run: |
           mkdir -p android/app/src/main/assets
-          cp index.html studio.html style.css dsp-engine.js shader-visualizer.js sync-manager.js app.js studio.js android/app/src/main/assets/
+          cp index.html studio.html manifest.json style.css dsp-engine.js shader-visualizer.js sync-manager.js app.js studio.js android/app/src/main/assets/
 
       - name: Build Android Projector APK
         working-directory: ./android
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleRelease --no-daemon
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk aura-vj-projector.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk aura-vj-projector.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

@@ -79,6 +79,28 @@ class ShaderVisualizer {
     this.customSceneGlsl = "return sceneLasers(uv);";
     this.customEffects = {};
 
+    // Комерційний PRO-статус, B2B-брендинг закладу та Keystone-маска проектора
+    this.isPro = false;
+    this.roomId = "----";
+    this.venueOverlay = {
+      enabled: false,
+      title: "",
+      subtitle: "",
+    };
+    this.keystone = {
+      scale: 1.0, // 0.5 .. 1.0
+      cropX: 0.0, // 0.0 .. 0.35
+      cropY: 0.0, // 0.0 .. 0.35
+    };
+
+    // Auto-FPS Optimizer для бюджетних проекторів (Magcubic HY300 / Mali-G31)
+    this.renderScale = 1.0;
+    this.rawViewportWidth = 1280;
+    this.rawViewportHeight = 720;
+    this.fpsFrames = 0;
+    this.fpsLastCheck = performance.now();
+    this.currentFps = 60;
+
     this.accumulatedTime = 0;
     this.lastTimestamp = performance.now();
 
@@ -99,6 +121,27 @@ class ShaderVisualizer {
     }));
   }
 
+  applyCanvasResolution() {
+    const w = Math.max(320, Math.round(this.rawViewportWidth * this.renderScale));
+    const h = Math.max(180, Math.round(this.rawViewportHeight * this.renderScale));
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+      if (this.gl) {
+        this.gl.viewport(0, 0, w, h);
+      }
+    }
+    if (this.overlayCanvas) {
+      if (
+        this.overlayCanvas.width !== this.rawViewportWidth ||
+        this.overlayCanvas.height !== this.rawViewportHeight
+      ) {
+        this.overlayCanvas.width = this.rawViewportWidth;
+        this.overlayCanvas.height = this.rawViewportHeight;
+      }
+    }
+  }
+
   setupResizeObserver() {
     const observer = new ResizeObserver(([entry]) => {
       const dpc = entry.devicePixelContentBoxSize;
@@ -110,17 +153,9 @@ class ShaderVisualizer {
         ? Math.min(dpc[0].blockSize, Math.round(entry.contentRect.height * 2))
         : Math.round(entry.contentRect.height * dpr);
 
-      this.canvas.width = w;
-      this.canvas.height = h;
-
-      if (this.overlayCanvas) {
-        this.overlayCanvas.width = w;
-        this.overlayCanvas.height = h;
-      }
-
-      if (this.gl) {
-        this.gl.viewport(0, 0, w, h);
-      }
+      this.rawViewportWidth = Math.max(320, w);
+      this.rawViewportHeight = Math.max(180, h);
+      this.applyCanvasResolution();
     });
 
     const supportsDevicePixelContentBox =
@@ -878,7 +913,7 @@ class ShaderVisualizer {
   }
 
   /**
-   * Рендер TouchDesigner Computer Vision Blob Tracking HUD поверх сцени/відео
+   * Рендер TouchDesigner Computer Vision Blob Tracking HUD, Keystone-маски та B2B/PRO оверлеїв
    */
   renderBlobOverlay(dspState, dt) {
     if (!this.overlayCanvas || !this.overlayCtx) return;
@@ -889,105 +924,190 @@ class ShaderVisualizer {
 
     // Показуємо CV-розмітку якщо увімкнений переключатель Blob HUD або активна сцена blobtrack
     const active = this.blobHudEnabled || this.modes[this.modeIndex] === "blobtrack";
-    if (!active) return;
+    if (active) {
+      const speedMul = 0.5 + (dspState.bass || 0) * 1.8;
 
-    const speedMul = 0.5 + (dspState.bass || 0) * 1.8;
+      // Оновлюємо координати трекінгових вузлів
+      this.trackedBlobs.forEach((b, i) => {
+        const bandVal = dspState[b.band] || 0.3;
+        b.x += b.vx * dt * speedMul;
+        b.y += b.vy * dt * speedMul;
 
-    // Оновлюємо координати трекінгових вузлів
-    this.trackedBlobs.forEach((b, i) => {
-      const bandVal = dspState[b.band] || 0.3;
-      b.x += b.vx * dt * speedMul;
-      b.y += b.vy * dt * speedMul;
+        // Плавний рух за орбітами шейдера + відскок від країв
+        const orbitX = 0.5 + Math.sin(this.accumulatedTime * 0.9 + i * 1.3) * 0.32;
+        const orbitY = 0.5 + Math.cos(this.accumulatedTime * 0.75 - i * 1.1) * 0.28;
+        b.x = b.x * 0.92 + orbitX * 0.08;
+        b.y = b.y * 0.92 + orbitY * 0.08;
 
-      // Плавний рух за орбітами шейдера + відскок від країв
-      const orbitX = 0.5 + Math.sin(this.accumulatedTime * 0.9 + i * 1.3) * 0.32;
-      const orbitY = 0.5 + Math.cos(this.accumulatedTime * 0.75 - i * 1.1) * 0.28;
-      b.x = b.x * 0.92 + orbitX * 0.08;
-      b.y = b.y * 0.92 + orbitY * 0.08;
+        if (b.x < 0.12 || b.x > 0.88) b.vx *= -1;
+        if (b.y < 0.15 || b.y > 0.85) b.vy *= -1;
 
-      if (b.x < 0.12 || b.x > 0.88) b.vx *= -1;
-      if (b.y < 0.15 || b.y > 0.85) b.vy *= -1;
+        b.currentSize = (b.size + bandVal * 95) * (w / 900 + 0.45);
+        b.px = b.x * w;
+        b.py = b.y * h;
+        b.val = bandVal;
+      });
 
-      b.currentSize = (b.size + bandVal * 95) * (w / 900 + 0.45);
-      b.px = b.x * w;
-      b.py = b.y * h;
-      b.val = bandVal;
-    });
-
-    ctx.save();
-    // 1. Векторні лінії зв'язку (Spline / Plexus Connections)
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < this.trackedBlobs.length; i++) {
-      for (let j = i + 1; j < this.trackedBlobs.length; j++) {
-        const a = this.trackedBlobs[i];
-        const b = this.trackedBlobs[j];
-        const dist = Math.hypot(a.px - b.px, a.py - b.py);
-        const maxDist = Math.min(w, h) * 0.48;
-        if (dist < maxDist) {
-          const alpha = (1.0 - dist / maxDist) * 0.55;
-          ctx.strokeStyle = `rgba(244, 244, 246, ${alpha.toFixed(2)})`;
-          ctx.beginPath();
-          ctx.moveTo(a.px, a.py);
-          // Крива Безьє як у TouchDesigner CHOP trail
-          const midX = (a.px + b.px) * 0.5;
-          const midY = (a.py + b.py) * 0.5 - 24 * (dspState.subBass || 0);
-          ctx.quadraticCurveTo(midX, midY, b.px, b.py);
-          ctx.stroke();
+      ctx.save();
+      // 1. Векторні лінії зв'язку (Spline / Plexus Connections)
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < this.trackedBlobs.length; i++) {
+        for (let j = i + 1; j < this.trackedBlobs.length; j++) {
+          const a = this.trackedBlobs[i];
+          const b = this.trackedBlobs[j];
+          const dist = Math.hypot(a.px - b.px, a.py - b.py);
+          const maxDist = Math.min(w, h) * 0.48;
+          if (dist < maxDist) {
+            const alpha = (1.0 - dist / maxDist) * 0.55;
+            ctx.strokeStyle = `rgba(244, 244, 246, ${alpha.toFixed(2)})`;
+            ctx.beginPath();
+            ctx.moveTo(a.px, a.py);
+            // Крива Безьє як у TouchDesigner CHOP trail
+            const midX = (a.px + b.px) * 0.5;
+            const midY = (a.py + b.py) * 0.5 - 24 * (dspState.subBass || 0);
+            ctx.quadraticCurveTo(midX, midY, b.px, b.py);
+            ctx.stroke();
+          }
         }
       }
+
+      // 2. Рамки комп'ютерного зору (Bounding Boxes + Crosshairs + Координати)
+      const fontSize = Math.max(10, Math.round(w * 0.012));
+      ctx.font = `600 ${fontSize}px "SF Mono", "JetBrains Mono", monospace`;
+
+      this.trackedBlobs.forEach((b, idx) => {
+        const half = b.currentSize * 0.5;
+        const x0 = b.px - half;
+        const y0 = b.py - half;
+        const isKick = idx % 2 === 0 && dspState.beatIntensity > 0.45;
+        const color = isKick ? "#ff5722" : "rgba(244, 244, 246, 0.85)";
+
+        ctx.strokeStyle = "rgba(244, 244, 246, 0.28)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x0, y0, b.currentSize, b.currentSize);
+
+        // Кутові акценти рамки
+        const corner = Math.max(6, b.currentSize * 0.18);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0 + corner);
+        ctx.lineTo(x0, y0);
+        ctx.lineTo(x0 + corner, y0);
+        ctx.moveTo(x0 + b.currentSize - corner, y0);
+        ctx.lineTo(x0 + b.currentSize, y0);
+        ctx.lineTo(x0 + b.currentSize, y0 + corner);
+        ctx.stroke();
+
+        // Приціл у центрі
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(b.px - 4, b.py);
+        ctx.lineTo(b.px + 4, b.py);
+        ctx.moveTo(b.px, b.py - 4);
+        ctx.lineTo(b.px, b.py + 4);
+        ctx.stroke();
+
+        // Підпис ID та живих координат [x, y, amp]
+        const label = `${b.id} [${b.x.toFixed(2)}, ${b.y.toFixed(2)}] ${(b.val * 100).toFixed(0)}%`;
+        ctx.fillStyle = "rgba(7, 7, 9, 0.82)";
+        ctx.fillRect(x0, y0 - fontSize - 6, ctx.measureText(label).width + 8, fontSize + 5);
+        ctx.fillStyle = color;
+        ctx.fillText(label, x0 + 4, y0 - 4);
+      });
+
+      ctx.restore();
     }
 
-    // 2. Рамки комп'ютерного зору (Bounding Boxes + Crosshairs + Координати)
-    const fontSize = Math.max(10, Math.round(w * 0.012));
-    ctx.font = `600 ${fontSize}px "SF Mono", "JetBrains Mono", monospace`;
+    // 3. B2B Вивіска закладу / DJ Stage Text (PRO-функція для барів, вечірок та стрімів)
+    if (this.venueOverlay.enabled && this.venueOverlay.title) {
+      ctx.save();
+      const pulse = 1.0 + (dspState.subBass || 0) * 0.14;
+      const baseTitleSize = Math.max(18, Math.round(w * 0.036));
+      ctx.translate(w * 0.5, h * 0.14);
+      ctx.scale(pulse, pulse);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
 
-    this.trackedBlobs.forEach((b, idx) => {
-      const half = b.currentSize * 0.5;
-      const x0 = b.px - half;
-      const y0 = b.py - half;
-      const isKick = idx % 2 === 0 && dspState.beatIntensity > 0.45;
-      const color = isKick ? "#ff5722" : "rgba(244, 244, 246, 0.85)";
+      ctx.font = `800 ${baseTitleSize}px "Inter", system-ui, sans-serif`;
+      ctx.shadowColor = dspState.beatIntensity > 0.5 ? "#ff5722" : "#00f5d4";
+      ctx.shadowBlur = 18 + (dspState.subBass || 0) * 24;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(this.venueOverlay.title.toUpperCase(), 0, 0);
 
-      ctx.strokeStyle = "rgba(244, 244, 246, 0.28)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x0, y0, b.currentSize, b.currentSize);
+      if (this.venueOverlay.subtitle) {
+        const subSize = Math.max(11, Math.round(w * 0.014));
+        ctx.font = `600 ${subSize}px "SF Mono", "JetBrains Mono", monospace`;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = "rgba(0, 245, 212, 0.9)";
+        ctx.fillText(this.venueOverlay.subtitle, 0, baseTitleSize * 0.78);
+      }
+      ctx.restore();
+    }
 
-      // Кутові акценти рамки
-      const corner = Math.max(6, b.currentSize * 0.18);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0 + corner);
-      ctx.lineTo(x0, y0);
-      ctx.lineTo(x0 + corner, y0);
-      ctx.moveTo(x0 + b.currentSize - corner, y0);
-      ctx.lineTo(x0 + b.currentSize, y0);
-      ctx.lineTo(x0 + b.currentSize, y0 + corner);
-      ctx.stroke();
+    // 4. Keystone / Room Masking (True Black #000000 обрізка країв для точного вписування в стіну/картину)
+    const padX = Math.max(0, Math.min(0.4, this.keystone.cropX + (1.0 - this.keystone.scale) * 0.5));
+    const padY = Math.max(0, Math.min(0.4, this.keystone.cropY + (1.0 - this.keystone.scale) * 0.5));
+    if (padX > 0.005 || padY > 0.005) {
+      ctx.save();
+      ctx.fillStyle = "#000000";
+      const cropW = Math.round(w * padX);
+      const cropH = Math.round(h * padY);
+      if (cropW > 0) {
+        ctx.fillRect(0, 0, cropW, h);
+        ctx.fillRect(w - cropW, 0, cropW, h);
+      }
+      if (cropH > 0) {
+        ctx.fillRect(0, 0, w, cropH);
+        ctx.fillRect(0, h - cropH, w, cropH);
+      }
+      ctx.restore();
+    }
 
-      // Приціл у центрі
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(b.px - 4, b.py);
-      ctx.lineTo(b.px + 4, b.py);
-      ctx.moveTo(b.px, b.py - 4);
-      ctx.lineTo(b.px, b.py + 4);
-      ctx.stroke();
+    // 5. Вірусний водяний знак у FREE-версії (повністю зникає при активації PRO)
+    if (!this.isPro) {
+      ctx.save();
+      const wmFont = Math.max(10, Math.round(w * 0.0105));
+      ctx.font = `600 ${wmFont}px "SF Mono", "JetBrains Mono", monospace`;
+      const wmText = `AURA VJ FREE · ROOM ${this.roomId}`;
+      const metrics = ctx.measureText(wmText);
+      const pad = 8;
+      const bx = w - metrics.width - pad * 2 - 18;
+      const by = 16;
+      ctx.fillStyle = "rgba(5, 5, 8, 0.65)";
+      ctx.fillRect(bx, by, metrics.width + pad * 2, wmFont + 10);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+      ctx.strokeRect(bx, by, metrics.width + pad * 2, wmFont + 10);
+      ctx.fillStyle = "rgba(244, 244, 246, 0.55)";
+      ctx.fillText(wmText, bx + pad, by + wmFont + 1);
+      ctx.restore();
+    }
+  }
 
-      // Підпис ID та живих координат [x, y, amp]
-      const label = `${b.id} [${b.x.toFixed(2)}, ${b.y.toFixed(2)}] ${(b.val * 100).toFixed(0)}%`;
-      ctx.fillStyle = "rgba(7, 7, 9, 0.82)";
-      ctx.fillRect(x0, y0 - fontSize - 6, ctx.measureText(label).width + 8, fontSize + 5);
-      ctx.fillStyle = color;
-      ctx.fillText(label, x0 + 4, y0 - 4);
-    });
+  updateAutoFpsScaler(now) {
+    this.fpsFrames++;
+    const elapsed = now - this.fpsLastCheck;
+    if (elapsed >= 1500) {
+      this.currentFps = Math.round((this.fpsFrames * 1000) / elapsed);
+      this.fpsFrames = 0;
+      this.fpsLastCheck = now;
 
-    ctx.restore();
+      // Якщо FPS просідає на бюджетному проекторі — знижуємо внутрішній буфер WebGL
+      if (this.currentFps < 42 && this.renderScale > 0.6) {
+        this.renderScale = Math.max(0.55, Number((this.renderScale - 0.2).toFixed(2)));
+        this.applyCanvasResolution();
+      } else if (this.currentFps >= 57 && this.renderScale < 1.0) {
+        this.renderScale = Math.min(1.0, Number((this.renderScale + 0.15).toFixed(2)));
+        this.applyCanvasResolution();
+      }
+    }
   }
 
   render(dspState, now = performance.now()) {
     const dt = Math.min(0.1, (now - this.lastTimestamp) / 1000);
     this.lastTimestamp = now;
+
+    this.updateAutoFpsScaler(now);
 
     const timeScale = this.fx.freeze ? 0.06 : 1.0 + dspState.subBass * 0.45;
     this.accumulatedTime += dt * timeScale;

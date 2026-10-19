@@ -4,8 +4,13 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <meta name="theme-color" content="#09090b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AURA VJ PRO" />
+    <link rel="manifest" href="manifest.json" />
     <title>AURA VJ PRO — Spatial Projection & FX Studio</title>
     <link rel="stylesheet" href="style.css" />
   </head>
@@ -14,7 +19,14 @@
     <header class="top-bar" id="topBar">
       <div class="brand-status">
         <span class="pulse-dot" id="beatLed"></span>
-        <span class="brand-title">AURA <strong>PRO</strong></span>
+        <span class="brand-title">AURA <strong>VJ</strong></span>
+        <button
+          class="pro-status-pill"
+          id="btnProBadge"
+          title="Керування ліцензією AURA VJ PRO та комерційними функціями"
+        >
+          <span id="proBadgeText">FREE</span>
+        </button>
         <span class="bpm-pill" id="bpmDisplay">128 BPM</span>
         <button
           class="room-pill"
@@ -26,6 +38,14 @@
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
           </svg>
           <span id="roomCodeText">----</span>
+        </button>
+        <button
+          class="room-pill rec-pill"
+          id="btnRecordVideo"
+          title="Записати 60 FPS відео зі звуком для TikTok / Instagram Reels"
+        >
+          <span class="rec-dot"></span>
+          <span id="recBtnText">REC</span>
         </button>
         <a
           href="studio.html"
@@ -691,6 +711,59 @@
               Luma Contour Mask
             </button>
           </div>
+
+          <!-- B2B VENUE OVERLAY & KEYSTONE ROOM MASKING (PRO FEATURES) -->
+          <div class="pro-venue-box">
+            <div class="strip-header" style="margin-top: 12px">
+              <span class="strip-title">💎 B2B VENUE SIGN & KEYSTONE MASK (PRO)</span>
+              <label class="toggle-pill">
+                <input type="checkbox" id="chkVenueOverlay" />
+                <span>SHOW SIGN</span>
+              </label>
+            </div>
+            <div class="venue-inputs-row">
+              <input
+                type="text"
+                id="inputVenueTitle"
+                maxlength="28"
+                placeholder="НАЗВА ЗАКЛАДУ / DJ (NEON BAR)"
+              />
+              <input
+                type="text"
+                id="inputVenueSub"
+                maxlength="36"
+                placeholder="Підпис (WIFI: aura2026 / @dj_max)"
+              />
+            </div>
+            <div class="fx-sliders-grid" style="margin-top: 8px">
+              <div class="fx-slider-row">
+                <div class="fx-slider-label">
+                  <span>Keystone Scale (Зум стіни)</span>
+                  <strong id="val_keystoneScale">100%</strong>
+                </div>
+                <input
+                  type="range"
+                  id="rangeKeystoneScale"
+                  min="50"
+                  max="100"
+                  value="100"
+                />
+              </div>
+              <div class="fx-slider-row">
+                <div class="fx-slider-label">
+                  <span>Room Border Mask (Обрізка країв)</span>
+                  <strong id="val_keystoneCrop">0%</strong>
+                </div>
+                <input
+                  type="range"
+                  id="rangeKeystoneCrop"
+                  min="0"
+                  max="35"
+                  value="0"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -761,6 +834,49 @@
         </div>
         <code class="remote-url" id="remoteUrlText"></code>
         <button class="close-modal-btn" id="btnCloseQr">CLOSE</button>
+      </div>
+    </div>
+
+    <!-- Модальне вікно комерційної підписки та активації AURA VJ PRO -->
+    <div class="qr-modal" id="proModal" hidden>
+      <div class="qr-card pro-modal-card">
+        <div class="pro-modal-badge">COMMERCIAL & PRO STUDIO</div>
+        <h3>AURA VJ <strong>PRO</strong> LICENSE</h3>
+        <p id="proModalStatusDesc">
+          Розблокуйте всі 9 TouchDesigner сцен, 6-шаровий Filmora FX стек, B2B-вивіску для закладів, Keystone-маску та приберіть водяний знак.
+        </p>
+
+        <div class="pro-plans-grid">
+          <div class="pro-plan-card" data-plan="monthly">
+            <span class="plan-name">CREATOR PASS</span>
+            <strong class="plan-price">$4.99<small>/міс</small></strong>
+            <span class="plan-sub">Всі 9 сцен + Без водяного знака</span>
+          </div>
+          <div class="pro-plan-card featured" data-plan="lifetime">
+            <span class="plan-tag">BEST VALUE</span>
+            <span class="plan-name">LIFETIME PRO</span>
+            <strong class="plan-price">$24.99<small> назавжди</small></strong>
+            <span class="plan-sub">FX Lab + CHOP + Keystone + B2B</span>
+          </div>
+        </div>
+
+        <div class="room-input-row" style="margin-top: 12px">
+          <input
+            type="text"
+            id="proLicenseInput"
+            maxlength="24"
+            placeholder="Ключ (напр. AURA-PRO-2026)"
+          />
+          <button id="btnActivateKey" class="join-room-btn pro-accent-btn">ACTIVATE</button>
+        </div>
+
+        <button id="btnInstantProDemo" class="pro-demo-btn">
+          ⚡ Увімкнути PRO Режим (Тестова Активація в 1 клік)
+        </button>
+
+        <button class="close-modal-btn" id="btnCloseProModal" style="margin-top: 8px">
+          CLOSE
+        </button>
       </div>
     </div>
 

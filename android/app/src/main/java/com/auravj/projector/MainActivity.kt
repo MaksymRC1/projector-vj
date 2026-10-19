@@ -153,6 +153,12 @@ class MainActivity : AppCompatActivity() {
             visualizer = vis
         } catch (e: Exception) {
             e.printStackTrace()
+            webView.post {
+                webView.evaluateJavascript(
+                    "window.onAndroidAudioFallback && window.onAndroidAudioFallback('Android DRM restricted session 0');",
+                    null
+                )
+            }
         }
     }
 
