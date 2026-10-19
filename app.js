@@ -343,6 +343,13 @@ class AuraVJApp {
     document.getElementById("btnCloseQr").addEventListener("click", () => {
       qrModal.hidden = true;
     });
+    const btnUpdateApk = document.getElementById("btnUpdateApkNative");
+    if (btnUpdateApk && window.AndroidAudioBridge && typeof window.AndroidAudioBridge.updateApk === "function") {
+      btnUpdateApk.style.display = "block";
+      btnUpdateApk.addEventListener("click", () => {
+        window.AndroidAudioBridge.updateApk();
+      });
+    }
     const btnJoinRoom = document.getElementById("btnJoinRoom");
     const roomInput = document.getElementById("roomInput");
     const submitJoin = () => {
