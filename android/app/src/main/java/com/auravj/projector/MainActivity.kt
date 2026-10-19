@@ -2,9 +2,14 @@ package com.auravj.projector
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.media.audiofx.Visualizer
+import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
@@ -13,16 +18,29 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.EditText
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
 import kotlin.math.hypot
 import kotlin.math.min
 
 /**
  * Нативний контейнер AURA VJ для Android-проекторів та Smart TV.
- * Перехоплює системний аудіомікшер (YouTube Music, Cast, Spotify) через Visualizer(0)
- * і передає спектр частот у WebGL-шейдер 60 разів на секунду.
+ *
+ * 1. Live Web/LAN Loader: динамічно завантажує актуальний веб-інтерфейс із локального
+ *    сервера комп'ютера або GitHub, тому зміни в шейдерах та синхронізації працюють
+ *    МИТТЄВО БЕЗ ПЕРЕВСТАНОВКИ ДОДАТКА!
+ * 2. Self-Updater: вміє самостійно завантажувати та оновлювати APK без флешки.
+ * 3. Нативний аудіомікшер: захоплення звуку через Visualizer(0).
  */
 class MainActivity : AppCompatActivity() {
 
@@ -30,11 +48,16 @@ class MainActivity : AppCompatActivity() {
     private var visualizer: Visualizer? = null
     private val AUDIO_PERMISSION_REQ = 1001
 
+    private lateinit var prefs: SharedPreferences
+    private val PREF_KEY_SERVER_HOST = "server_host"
+    private val DEFAULT_SERVER_HOST = "192.168.0.40:3456"
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Утримуємо екран проектора завжди увімкненим
+        prefs = getSharedPreferences("aura_vj_prefs", Context.MODE_PRIVATE)
+
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemUI()
 
@@ -47,6 +70,7 @@ class MainActivity : AppCompatActivity() {
         settings.mediaPlaybackRequiresUserGesture = false
         settings.allowFileAccess = true
         settings.allowContentAccess = true
+        settings.cacheMode = WebSettings.LOAD_NO_CACHE
 
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.webViewClient = object : WebViewClient() {
@@ -56,11 +80,13 @@ class MainActivity : AppCompatActivity() {
                 description: String?,
                 failingUrl: String?
             ) {
-                if (failingUrl?.startsWith("https://") == true) {
+                // Якщо локальний сервер недоступний — перемикаємось на офлайн ассети
+                if (failingUrl != null && !failingUrl.startsWith("file:///android_asset")) {
                     view?.loadUrl("file:///android_asset/index.html?view=projector")
                 }
             }
         }
+
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 request.grant(request.resources)
@@ -68,9 +94,67 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.addJavascriptInterface(AndroidAudioBridge(), "AndroidAudioBridge")
-        webView.loadUrl("https://maksymrc1.github.io/projector-vj/index.html?view=projector")
+
+        // Завантажуємо найкраще доступне джерело (LAN Server -> GitHub Live -> Offline Asset)
+        loadBestAvailableSource()
 
         checkAndStartSystemAudio()
+    }
+
+    private fun getServerHost(): String {
+        return prefs.getString(PREF_KEY_SERVER_HOST, DEFAULT_SERVER_HOST) ?: DEFAULT_SERVER_HOST
+    }
+
+    private fun setServerHost(host: String) {
+        val clean = host.trim().replace("http://", "").replace("https://", "").replace("/", "")
+        prefs.edit().putString(PREF_KEY_SERVER_HOST, clean).apply()
+    }
+
+    /**
+     * Автоматичне визначення джерела:
+     * 1. Якщо запущено node server.js на комп'ютері — вантажимо прямо з нього (0 ms затримки).
+     * 2. Якщо сервер вимкнено, але є інтернет — вантажимо свіжу версію з GitHub.
+     * 3. Якщо інтернету немає взагалі — вантажимо вбудований офлайн-ассет.
+     */
+    private fun loadBestAvailableSource() {
+        val host = getServerHost()
+        thread {
+            val lanUrl = "http://$host/?view=projector"
+            val isLanReachable = checkUrlReachable("http://$host/")
+
+            runOnUiThread {
+                if (isLanReachable) {
+                    Toast.makeText(this, "⚡ Підключено до LAN: $host", Toast.LENGTH_SHORT).show()
+                    webView.loadUrl(lanUrl)
+                } else {
+                    thread {
+                        val githubUrl = "https://maksymrc1.github.io/projector-vj/index.html?view=projector&lan=$host"
+                        val isOnlineReachable = checkUrlReachable("https://maksymrc1.github.io/projector-vj/index.html")
+                        runOnUiThread {
+                            if (isOnlineReachable) {
+                                webView.loadUrl(githubUrl)
+                            } else {
+                                webView.loadUrl("file:///android_asset/index.html?view=projector")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun checkUrlReachable(targetUrl: String): Boolean {
+        return try {
+            val conn = URL(targetUrl).openConnection() as HttpURLConnection
+            conn.connectTimeout = 1200
+            conn.readTimeout = 1200
+            conn.requestMethod = "HEAD"
+            val code = conn.responseCode
+            conn.disconnect()
+            code in 200..399
+        } catch (e: Exception) {
+            false
+        }
     }
 
     inner class AndroidAudioBridge {
@@ -78,6 +162,136 @@ class MainActivity : AppCompatActivity() {
         fun startSystemAudio() {
             runOnUiThread { checkAndStartSystemAudio() }
         }
+
+        @JavascriptInterface
+        fun getServerHost(): String = this@MainActivity.getServerHost()
+
+        @JavascriptInterface
+        fun setServerHost(host: String) {
+            runOnUiThread {
+                this@MainActivity.setServerHost(host)
+                loadBestAvailableSource()
+            }
+        }
+
+        @JavascriptInterface
+        fun reloadApp() {
+            runOnUiThread { loadBestAvailableSource() }
+        }
+
+        @JavascriptInterface
+        fun updateApk() {
+            runOnUiThread { downloadAndInstallApkUpdate() }
+        }
+
+        @JavascriptInterface
+        fun getAppVersion(): String = "2.7.0"
+    }
+
+    /**
+     * Оновлення APK безпосередньо всередині додатка без комп'ютера чи флешки
+     */
+    private fun downloadAndInstallApkUpdate() {
+        Toast.makeText(this, "⬇️ Завантаження оновлення AURA VJ...", Toast.LENGTH_LONG).show()
+
+        val host = getServerHost()
+        // Спочатку шукаємо APK на локальному сервері, якщо немає — на GitHub Releases
+        val localApkUrl = "http://$host/aura-vj-projector.apk"
+        val githubApkUrl = "https://github.com/MaksymRC1/projector-vj/releases/download/v1.0.0/aura-vj-projector.apk"
+
+        thread {
+            var downloadUrl = if (checkUrlReachable(localApkUrl)) localApkUrl else githubApkUrl
+            try {
+                val url = URL(downloadUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 10000
+                conn.readTimeout = 30000
+                conn.connect()
+
+                if (conn.responseCode !in 200..399) {
+                    runOnUiThread {
+                        Toast.makeText(this, "Помилка сервера завантаження: ${conn.responseCode}", Toast.LENGTH_SHORT).show()
+                    }
+                    return@thread
+                }
+
+                val apkFile = File(cacheDir, "aura-vj-update.apk")
+                if (apkFile.exists()) apkFile.delete()
+
+                val input = conn.inputStream
+                val output = FileOutputStream(apkFile)
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    output.write(buffer, 0, bytesRead)
+                }
+                output.flush()
+                output.close()
+                input.close()
+
+                runOnUiThread {
+                    Toast.makeText(this, "✅ Завантажено! Запуск встановлення...", Toast.LENGTH_SHORT).show()
+                    launchApkInstaller(apkFile)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "Помилка завантаження: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun launchApkInstaller(apkFile: File) {
+        try {
+            val apkUri: Uri = FileProvider.getUriForFile(
+                this,
+                "$packageName.provider",
+                apkFile
+            )
+
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Не вдалося відкрити інсталятор: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Меню налаштувань для пульта проектора (кнопка MENU / SETTINGS)
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_SETTINGS) {
+            showServerSettingsDialog()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun showServerSettingsDialog() {
+        val currentHost = getServerHost()
+        val input = EditText(this)
+        input.setText(currentHost)
+        input.hint = "Наприклад: 192.168.0.40:3456"
+
+        AlertDialog.Builder(this)
+            .setTitle("⚙️ AURA VJ — Налаштування LAN")
+            .setMessage("Введіть IP-адресу вашого комп'ютера у спільній Wi-Fi мережі:")
+            .setView(input)
+            .setPositiveButton("Зберегти та перезавантажити") { _, _ ->
+                val newHost = input.text.toString().trim()
+                if (newHost.isNotEmpty()) {
+                    setServerHost(newHost)
+                    loadBestAvailableSource()
+                }
+            }
+            .setNeutralButton("Оновити APK з мережі") { _, _ ->
+                downloadAndInstallApkUpdate()
+            }
+            .setNegativeButton("Закрити", null)
+            .show()
     }
 
     private fun checkAndStartSystemAudio() {
@@ -108,14 +322,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Підключення до глобального аудіомікшера Android (audioSession = 0)
-     * Дозволяє візуалізувати YouTube Music, Google Cast, Spotify без мікрофона!
-     */
     private fun initGlobalVisualizer() {
         try {
             visualizer?.release()
-            // Session ID 0 = Master Output Mix всього пристрою Android
             val vis = Visualizer(0)
             vis.enabled = false
             val captureSizeRange = Visualizer.getCaptureSizeRange()
@@ -163,10 +372,9 @@ class MainActivity : AppCompatActivity() {
             vis.enabled = true
             visualizer = vis
         } catch (e: Exception) {
-            e.printStackTrace()
             webView.post {
                 webView.evaluateJavascript(
-                    "window.onAndroidAudioFallback && window.onAndroidAudioFallback('Android DRM restricted session 0');",
+                    "window.onAndroidAudioFallback && window.onAndroidAudioFallback('DRM session 0 restricted');",
                     null
                 )
             }

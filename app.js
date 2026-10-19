@@ -1409,17 +1409,17 @@ class AuraVJApp {
   }
 
   renderQrModal() {
-    const baseUrl =
-      window.location.protocol === "file:"
-        ? "https://maksymrc1.github.io/projector-vj/"
-        : `${window.location.origin}${window.location.pathname}`;
-    const remoteUrl = `${baseUrl}?view=remote&room=${encodeURIComponent(this.sync.roomId)}`;
-    document.getElementById("remoteUrlText").textContent = remoteUrl;
+    const host = this.sync.serverHost || "192.168.0.40:3456";
+    const remoteUrl = `http://${host}/?view=remote&room=${encodeURIComponent(this.sync.roomId)}`;
+    const remoteUrlEl = document.getElementById("remoteUrlText");
+    if (remoteUrlEl) remoteUrlEl.textContent = remoteUrl;
     const roomInput = document.getElementById("roomInput");
     if (roomInput) roomInput.value = this.sync.roomId;
     const qrBox = document.getElementById("qrCodeBox");
     const encoded = encodeURIComponent(remoteUrl);
-    qrBox.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR Code для підключення смартфона" />`;
+    if (qrBox) {
+      qrBox.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encoded}" alt="QR Code для підключення смартфона" />`;
+    }
   }
 
   loadSavedCustomEffects() {
@@ -1642,27 +1642,24 @@ class AuraVJApp {
     const text = document.getElementById("roomCodeText");
     if (!badge || !text) return;
 
-    const isConnected =
-      this.sync.cloudConnected ||
-      (this.sync.lanWs && this.sync.lanWs.readyState === WebSocket.OPEN);
+    const isConnected = !!this.sync.connected;
 
     badge.classList.toggle("online", isConnected);
 
     if (isLinked) {
       badge.classList.add("peer-linked");
-      badge.classList.toggle("p2p-active", !!this.sync.p2pConnected);
-      const connSuffix = this.sync.p2pConnected ? " ⚡ P2P" : " 🟢";
-      badge.title = `Кімната ${this.sync.roomId}: Синхронізовано з ${role === "remote" ? "Пультом" : "Проектором"}!${this.sync.p2pConnected ? " (Прямий WebRTC канал <15ms)" : ""}`;
-      text.textContent = `${this.sync.roomId}${connSuffix}`;
+      badge.classList.add("p2p-active");
+      badge.title = `Кімната ${this.sync.roomId}: Синхронізовано з ${role === "remote" ? "Пультом" : "Проектором"} через Wi-Fi (${this.sync.serverHost})!`;
+      text.textContent = `${this.sync.roomId} ⚡ LAN`;
     } else {
       badge.classList.remove("peer-linked");
       badge.classList.remove("p2p-active");
       if (isConnected) {
-        badge.title = `Кімната ${this.sync.roomId}: Онлайн (${this.sync.connectedBrokerCount || 1} серверів). Очікуємо підключення іншого пристрою...`;
-        text.textContent = `${this.sync.roomId} 🟡`;
+        badge.title = `Сервер підключено (${this.sync.serverHost}). Очікуємо підключення іншого пристрою...`;
+        text.textContent = `${this.sync.roomId} 🟡 LAN`;
       } else {
-        badge.title = `Кімната ${this.sync.roomId}: Підключення до сервера синхронізації...`;
-        text.textContent = `${this.sync.roomId} ⏳`;
+        badge.title = `Підключення до локального сервера ${this.sync.serverHost}...`;
+        text.textContent = `${this.sync.roomId} ⏳ LAN`;
       }
     }
   }

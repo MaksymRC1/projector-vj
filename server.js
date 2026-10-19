@@ -19,12 +19,30 @@ const MIME_TYPES = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".svg": "image/svg+xml",
+  ".apk": "application/vnd.android.package-archive",
 };
 
 const clients = new Set();
 
 const server = http.createServer((req, res) => {
   const urlPath = req.url.split("?")[0];
+
+  // API endpoint для перевірки статусу та версії сервера
+  if (urlPath === "/api/info" || urlPath === "/api/version") {
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-cache",
+    });
+    res.end(JSON.stringify({
+      version: "2.7.0",
+      ip: getLocalIp(),
+      port: PORT,
+      timestamp: Date.now(),
+    }));
+    return;
+  }
+
   const safePath = path.normalize(urlPath === "/" ? "/index.html" : urlPath);
   const filePath = path.join(__dirname, safePath);
 
@@ -41,7 +59,11 @@ const server = http.createServer((req, res) => {
       return;
     }
     const ext = path.extname(filePath);
-    res.writeHead(200, { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+    });
     res.end(content);
   });
 });

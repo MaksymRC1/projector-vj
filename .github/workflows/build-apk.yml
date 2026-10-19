@@ -53,8 +53,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
-          name: "AURA VJ — Android Projector & Smart TV APK"
-          body: "Нативний Android APK для проекторів та Smart TV із перехопленням системного звуку YouTube Music / Cast (Visualizer API) та хмарною синхронізацією з iPhone."
+          name: "AURA VJ — Android Projector & Smart TV APK v2.7.0"
+          body: "Оновлений Android APK для проекторів та Smart TV із підтримкою прямої Wi-Fi LAN синхронізації (<1ms), динамічного Live-завантаження оновлень без перевстановлення, та вбудованим механізмом оновлення."
           files: aura-vj-projector.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
