@@ -1,19 +1,26 @@
 /**
- * Головний контролер AURA VJ (Проектор + Смартфон Пульт + D-Pad Spatial Navigation)
+ * Головний контролер AURA VJ PRO (Проектор + Смартфон Пульт + TouchDesigner & Filmora FX Studio)
  */
 class AuraVJApp {
   constructor() {
     this.dsp = new DSPEngine();
     this.canvas = document.getElementById("shaderCanvas");
-    this.visualizer = new ShaderVisualizer(this.canvas);
+    this.overlayCanvas = document.getElementById("tdOverlayCanvas");
+    this.visualizer = new ShaderVisualizer(this.canvas, this.overlayCanvas);
     this.sync = new SyncManager((msg) => this.handleSyncMessage(msg));
 
     this.currentView = "split"; // 'split' | 'projector' | 'remote'
     this.hudTimeout = null;
     this.audioStarted = false;
+    this.cameraStream = null;
+    this.userPresets = this.loadUserPresets();
 
     this.initUrlParams();
     this.setupUI();
+    this.setupStudioTabs();
+    this.setupFilmoraFX();
+    this.setupTouchDesignerCHOP();
+    this.setupMediaTop();
     this.setupXYPad();
     this.setupFXButtons();
     this.setupSpatialNavigation();
@@ -73,12 +80,10 @@ class AuraVJApp {
     const roomTextEl = document.getElementById("roomCodeText");
     if (roomTextEl) roomTextEl.textContent = this.sync.roomId;
 
-    // Якщо це нативний Android APK на проекторі — запускаємо системне перехоплення звуку
     if (window.AndroidAudioBridge) {
       this.ensureAudioStarted("native_android");
     }
 
-    // Автозапуск звуку при першому дотику користувача
     const unlockAudio = () => {
       if (!this.audioStarted) {
         this.ensureAudioStarted(this.dsp.activeSource);
@@ -89,12 +94,10 @@ class AuraVJApp {
     window.addEventListener("pointerdown", unlockAudio, { once: true });
     window.addEventListener("keydown", unlockAudio, { once: true });
 
-    // Перемикач режимів екрана (Split / Проектор / Пульт)
     document.querySelectorAll(".view-btn").forEach((btn) => {
       btn.addEventListener("click", () => this.setView(btn.dataset.targetView));
     });
 
-    // Вибір джерела звуку
     const fileInput = document.getElementById("audioFileInput");
     document.querySelectorAll(".src-pill").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -116,13 +119,11 @@ class AuraVJApp {
       }
     });
 
-    // Чекбокс звуку синтезатора
     const chkSynth = document.getElementById("chkSynthAudio");
     chkSynth.addEventListener("change", (e) => {
       this.dsp.setSynthMute(!e.target.checked);
     });
 
-    // Перемикання візуальних сцен (і на пульті, і в доці проектора)
     const selectMode = (mode) => {
       this.visualizer.setMode(mode);
       this.highlightModeButtons(mode);
@@ -133,7 +134,6 @@ class AuraVJApp {
       btn.addEventListener("click", () => selectMode(btn.dataset.mode));
     });
 
-    // QR-код, Код Кімнати та Повний екран
     const qrModal = document.getElementById("qrModal");
     const openQrModal = () => {
       this.renderQrModal();
@@ -167,6 +167,321 @@ class AuraVJApp {
     });
   }
 
+  /**
+   * Вкладки студії: Сцени & XY / Filmora FX / TouchDesigner CHOP Ноди / Відео & Камера
+   */
+  setupStudioTabs() {
+    const tabs = document.querySelectorAll(".studio-tab");
+    const panels = document.querySelectorAll(".studio-panel");
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const targetId = tab.dataset.tab;
+        tabs.forEach((t) => t.classList.toggle("active", t === tab));
+        panels.forEach((p) => p.classList.toggle("active", p.id === targetId));
+      });
+    });
+  }
+
+  /**
+   * Конструктор шарів Filmora FX + Пресети комбінацій + TouchDesigner CV Blob HUD
+   */
+  setupFilmoraFX() {
+    const chkBlobHud = document.getElementById("chkBlobHud");
+    if (chkBlobHud) {
+      chkBlobHud.addEventListener("change", (e) => {
+        this.visualizer.blobHudEnabled = e.target.checked;
+        this.broadcastPostFxState();
+      });
+    }
+
+    document.querySelectorAll(".fx-range").forEach((slider) => {
+      slider.addEventListener("input", (e) => {
+        const name = slider.dataset.fx;
+        const pct = Number(e.target.value);
+        this.visualizer.setPostFx(name, pct / 100);
+        const label = document.getElementById(`val_${name}`);
+        if (label) label.textContent = `${pct}%`;
+        this.broadcastPostFxState();
+      });
+    });
+
+    const builtInPresets = {
+      clean: {
+        postFx: { rgbSplit: 0, glitch: 0, kaleido: 0, edges: 0, feedback: 0, pixelate: 0 },
+        blobHud: false,
+      },
+      vhs: {
+        postFx: { rgbSplit: 0.65, glitch: 0.58, kaleido: 0, edges: 0, feedback: 0.2, pixelate: 0 },
+        blobHud: false,
+      },
+      td_cv: {
+        postFx: { rgbSplit: 0.3, glitch: 0.15, kaleido: 0, edges: 0.65, feedback: 0.35, pixelate: 0 },
+        blobHud: true,
+      },
+      acid: {
+        postFx: { rgbSplit: 0.45, glitch: 0, kaleido: 0.65, edges: 0.25, feedback: 0.72, pixelate: 0 },
+        blobHud: false,
+      },
+      led: {
+        postFx: { rgbSplit: 0.25, glitch: 0.2, kaleido: 0, edges: 0, feedback: 0, pixelate: 0.68 },
+        blobHud: false,
+      },
+    };
+
+    document.querySelectorAll("[data-fx-preset]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const key = chip.dataset.fxPreset;
+        const preset = builtInPresets[key];
+        if (!preset) return;
+        document.querySelectorAll("[data-fx-preset]").forEach((c) =>
+          c.classList.toggle("active", c === chip)
+        );
+        this.applyPatchState({
+          postFx: preset.postFx,
+          blobHudEnabled: preset.blobHud,
+        });
+        this.broadcastPostFxState();
+      });
+    });
+  }
+
+  /**
+   * TouchDesigner Audio-CHOP Матриця маршрутизації + Генератор патчів + Збереження пресетів
+   */
+  setupTouchDesignerCHOP() {
+    document.querySelectorAll(".chop-select").forEach((sel) => {
+      sel.addEventListener("change", (e) => {
+        const name = sel.dataset.chop;
+        this.visualizer.setChopRoute(name, e.target.value);
+        this.broadcastPostFxState();
+      });
+    });
+
+    const btnRandom = document.getElementById("btnRandomPatch");
+    if (btnRandom) {
+      btnRandom.addEventListener("click", () => {
+        const sources = ["none", "subBass", "bass", "mid", "high", "lfo"];
+        const randomPostFx = {};
+        const randomChop = {};
+        Object.keys(this.visualizer.postFx).forEach((key) => {
+          const active = Math.random() > 0.42;
+          randomPostFx[key] = active ? Number((0.2 + Math.random() * 0.65).toFixed(2)) : 0;
+          randomChop[key] = active
+            ? sources[Math.floor(Math.random() * sources.length)]
+            : "none";
+        });
+        this.applyPatchState({
+          postFx: randomPostFx,
+          chopRouting: randomChop,
+          blobHudEnabled: Math.random() > 0.5,
+        });
+        this.broadcastPostFxState();
+      });
+    }
+
+    const btnSave = document.getElementById("btnSaveUserPreset");
+    if (btnSave) {
+      btnSave.addEventListener("click", () => {
+        const name = prompt(
+          "Назва вашого пресету (TouchDesigner / Filmora):",
+          `Мій Патч #${this.userPresets.length + 1}`
+        );
+        if (!name) return;
+        const entry = {
+          name: name.trim().slice(0, 22),
+          mode: this.visualizer.modes[this.visualizer.modeIndex],
+          postFx: { ...this.visualizer.postFx },
+          chopRouting: { ...this.visualizer.chopRouting },
+          blobHudEnabled: this.visualizer.blobHudEnabled,
+        };
+        this.userPresets.push(entry);
+        this.saveUserPresets();
+        this.renderUserPresets();
+      });
+    }
+
+    this.renderUserPresets();
+  }
+
+  loadUserPresets() {
+    try {
+      const raw = localStorage.getItem("aura_vj_user_presets");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  saveUserPresets() {
+    try {
+      localStorage.setItem("aura_vj_user_presets", JSON.stringify(this.userPresets));
+    } catch {
+      // Ігноруємо помилки quota
+    }
+  }
+
+  renderUserPresets() {
+    const bar = document.getElementById("userPresetsBar");
+    if (!bar) return;
+    bar.innerHTML = "";
+    this.userPresets.forEach((preset, idx) => {
+      const btn = document.createElement("button");
+      btn.className = "fx-chip";
+      btn.textContent = `⭐ ${preset.name}`;
+      btn.addEventListener("click", () => {
+        if (preset.mode) {
+          this.visualizer.setMode(preset.mode);
+          this.highlightModeButtons(preset.mode);
+          this.sync.send({ type: "mode", mode: preset.mode });
+        }
+        this.applyPatchState(preset);
+        this.broadcastPostFxState();
+      });
+      btn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        this.userPresets.splice(idx, 1);
+        this.saveUserPresets();
+        this.renderUserPresets();
+      });
+      bar.appendChild(btn);
+    });
+  }
+
+  applyPatchState(state) {
+    if (state.postFx) {
+      Object.entries(state.postFx).forEach(([k, val]) => {
+        this.visualizer.setPostFx(k, val);
+        const slider = document.querySelector(`.fx-range[data-fx="${k}"]`);
+        const label = document.getElementById(`val_${k}`);
+        const pct = Math.round(val * 100);
+        if (slider) slider.value = String(pct);
+        if (label) label.textContent = `${pct}%`;
+      });
+    }
+    if (state.chopRouting) {
+      Object.entries(state.chopRouting).forEach(([k, src]) => {
+        this.visualizer.setChopRoute(k, src);
+        const sel = document.querySelector(`.chop-select[data-chop="${k}"]`);
+        if (sel) sel.value = src;
+      });
+    }
+    if (typeof state.blobHudEnabled === "boolean") {
+      this.visualizer.blobHudEnabled = state.blobHudEnabled;
+      const chk = document.getElementById("chkBlobHud");
+      if (chk) chk.checked = state.blobHudEnabled;
+    }
+  }
+
+  broadcastPostFxState() {
+    this.sync.send({
+      type: "postFx",
+      postFx: this.visualizer.postFx,
+      chopRouting: this.visualizer.chopRouting,
+      blobHudEnabled: this.visualizer.blobHudEnabled,
+    });
+  }
+
+  /**
+   * Media TOP: Завантаження власного Відео / Фото або підключення Живої Камери під шейдери
+   */
+  setupMediaTop() {
+    const btnUpload = document.getElementById("btnUploadMedia");
+    const btnCamera = document.getElementById("btnLiveCamera");
+    const btnClear = document.getElementById("btnClearMedia");
+    const mediaInput = document.getElementById("mediaFileInput");
+    const videoEl = document.getElementById("customVideoEl");
+    const imgEl = document.getElementById("customImageEl");
+    const rangeMix = document.getElementById("rangeMediaMix");
+    const valMix = document.getElementById("val_mediaMix");
+
+    const updateMixUI = (pct) => {
+      this.visualizer.mediaMix = pct / 100;
+      if (rangeMix) rangeMix.value = String(pct);
+      if (valMix) valMix.textContent = `${pct}%`;
+    };
+
+    if (btnUpload && mediaInput) {
+      btnUpload.addEventListener("click", () => mediaInput.click());
+      mediaInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.stopCameraStream();
+        const url = URL.createObjectURL(file);
+
+        if (file.type.startsWith("video/")) {
+          videoEl.srcObject = null;
+          videoEl.src = url;
+          videoEl.play().catch(() => {});
+          this.visualizer.setMediaSource(videoEl);
+        } else {
+          imgEl.onload = () => {
+            this.visualizer.setMediaSource(imgEl);
+          };
+          imgEl.src = url;
+        }
+        btnUpload.classList.add("active");
+        btnCamera.classList.remove("active");
+        updateMixUI(80);
+      });
+    }
+
+    if (btnCamera) {
+      btnCamera.addEventListener("click", async () => {
+        try {
+          this.stopCameraStream();
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false,
+          });
+          this.cameraStream = stream;
+          videoEl.src = "";
+          videoEl.srcObject = stream;
+          await videoEl.play();
+          this.visualizer.setMediaSource(videoEl);
+          btnCamera.classList.add("active");
+          if (btnUpload) btnUpload.classList.remove("active");
+          updateMixUI(85);
+        } catch (err) {
+          alert(`Не вдалося увімкнути камеру: ${err.message}`);
+        }
+      });
+    }
+
+    if (btnClear) {
+      btnClear.addEventListener("click", () => {
+        this.stopCameraStream();
+        videoEl.pause();
+        videoEl.src = "";
+        this.visualizer.clearMediaSource();
+        if (btnUpload) btnUpload.classList.remove("active");
+        if (btnCamera) btnCamera.classList.remove("active");
+        updateMixUI(0);
+      });
+    }
+
+    if (rangeMix) {
+      rangeMix.addEventListener("input", (e) => {
+        updateMixUI(Number(e.target.value));
+      });
+    }
+
+    document.querySelectorAll("[data-media-mode]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll("[data-media-mode]").forEach((c) =>
+          c.classList.toggle("active", c === chip)
+        );
+        this.visualizer.mediaBlendMode = Number(chip.dataset.mediaMode) || 0;
+      });
+    });
+  }
+
+  stopCameraStream() {
+    if (this.cameraStream) {
+      this.cameraStream.getTracks().forEach((t) => t.stop());
+      this.cameraStream = null;
+    }
+  }
+
   highlightSourceButton(source) {
     document.querySelectorAll(".src-pill").forEach((b) => {
       const isMatch = b.dataset.source === source;
@@ -185,7 +500,6 @@ class AuraVJApp {
 
   setupXYPad() {
     const pad = document.getElementById("xyPad");
-    const puck = document.getElementById("xyPuck");
     let isDragging = false;
 
     const updateFromEvent = (e) => {
@@ -229,7 +543,6 @@ class AuraVJApp {
     const btnFreeze = document.getElementById("fxFreeze");
     const btnColorDrop = document.getElementById("fxColorDrop");
 
-    // STROBE (поки утримується)
     const setStrobe = (active) => {
       this.visualizer.fx.strobe = active;
       btnStrobe.classList.toggle("active", active);
@@ -243,7 +556,6 @@ class AuraVJApp {
     btnStrobe.addEventListener("pointerleave", () => setStrobe(false));
     btnStrobe.addEventListener("pointercancel", () => setStrobe(false));
 
-    // FREEZE (поки утримується)
     const setFreeze = (active) => {
       this.visualizer.fx.freeze = active;
       btnFreeze.classList.toggle("active", active);
@@ -257,14 +569,12 @@ class AuraVJApp {
     btnFreeze.addEventListener("pointerleave", () => setFreeze(false));
     btnFreeze.addEventListener("pointercancel", () => setFreeze(false));
 
-    // SHOCKWAVE (миттєвий вибух)
     btnShockwave.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       this.visualizer.triggerShockwave();
       this.sync.send({ type: "fx", effect: "shockwave" });
     });
 
-    // COLOR DROP (миттєва зміна неонової палітри)
     btnColorDrop.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       this.visualizer.triggerColorDrop();
@@ -321,7 +631,6 @@ class AuraVJApp {
         const currRect = current.getBoundingClientRect();
         const tolerance = 2;
 
-        // 1. Edge-based direction filter
         const validCandidates = candidates
           .filter((el) => el !== current)
           .map((el) => ({ el, rect: el.getBoundingClientRect() }))
@@ -334,7 +643,6 @@ class AuraVJApp {
           });
 
         if (validCandidates.length === 0) {
-          // Не блокуємо preventDefault(), якщо кандидата в цьому напрямку немає
           return;
         }
 
@@ -358,14 +666,13 @@ class AuraVJApp {
             : rect.right > currRect.left && rect.left < currRect.right;
 
           const candCenterPerp = isHorizontal
-            ? (rect.top + rect.bottom) / 2
+            ? (rect.top + currRect.bottom) / 2
             : (rect.left + rect.right) / 2;
           const perpOffset = Math.abs(candCenterPerp - currCenterPerp);
 
           return { el, gap, overlapsPerp, perpOffset };
         });
 
-        // 2. Спочатку кандидати з перетином по перпендикулярній осі, інакше зважений fallback
         const aligned = scored.filter((c) => c.overlapsPerp);
         let winner;
         if (aligned.length > 0) {
@@ -444,6 +751,8 @@ class AuraVJApp {
     } else if (msg.type === "xy") {
       this.visualizer.setXY(msg.x, msg.y);
       this.updateXYUI(msg.x, msg.y);
+    } else if (msg.type === "postFx") {
+      this.applyPatchState(msg);
     } else if (msg.type === "fx") {
       if (msg.effect === "strobe") this.visualizer.fx.strobe = !!msg.active;
       if (msg.effect === "freeze") this.visualizer.fx.freeze = !!msg.active;
@@ -453,7 +762,6 @@ class AuraVJApp {
         this.visualizer.triggerShockwave();
       }
     } else if (msg.type === "dspTelemetry") {
-      // Якщо проектор не перехоплює системний звук Android APK — приймає спектр з iPhone
       if (
         this.currentView === "projector" &&
         this.dsp.activeSource !== "native_android"
@@ -471,7 +779,6 @@ class AuraVJApp {
     if (this.audioStarted) {
       dspState = this.dsp.update(now);
     } else {
-      // Автономний демо-ритм до першого кліку
       const t = now / 1000;
       const beatPhase = (now % 468.75) / 468.75;
       const kick = Math.pow(Math.max(0, 1.0 - beatPhase * 3.2), 2.0);
@@ -489,7 +796,6 @@ class AuraVJApp {
       };
     }
 
-    // Якщо смартфон відкритий як пульт — транслюємо спектр його мікрофона на проектор
     if (this.currentView === "remote" && this.audioStarted) {
       this.sync.send({
         type: "dspTelemetry",
@@ -507,10 +813,16 @@ class AuraVJApp {
       });
     }
 
-    // Оновлюємо WebGL шейдер
     this.visualizer.render(dspState, now);
 
-    // Оновлюємо індикатори BPM та 4 частотних смуг
+    // Оновлюємо індикатори Audio-CHOP матриці
+    for (const [key, val] of Object.entries(this.visualizer.effectivePostFx)) {
+      const bar = document.getElementById(`chopBar_${key}`);
+      if (bar) {
+        bar.style.width = `${Math.round(val * 100)}%`;
+      }
+    }
+
     const beatLed = document.getElementById("beatLed");
     if (beatLed) {
       beatLed.classList.toggle("beat-hit", dspState.beatIntensity > 0.55);

@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <title>AURA VJ — Проекційна Світломузика & Смарт-Пульт</title>
+    <title>AURA VJ Studio — Проектор + TouchDesigner & Filmora FX</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body data-view="split">
@@ -14,29 +14,50 @@
     <header class="top-bar" id="topBar">
       <div class="brand-status">
         <span class="pulse-dot" id="beatLed"></span>
-        <span class="brand-title">AURA <strong>VJ</strong></span>
+        <span class="brand-title">AURA <strong>VJ PRO</strong></span>
         <span class="bpm-pill" id="bpmDisplay">128 BPM</span>
-        <button class="room-pill" id="btnRoomBadge" title="З'єднати iPhone та Проектор за QR/кодом кімнати">
+        <button
+          class="room-pill"
+          id="btnRoomBadge"
+          title="З'єднати iPhone та Проектор за QR/кодом кімнати"
+        >
           🔗 <span id="roomCodeText">----</span>
         </button>
       </div>
 
       <div class="view-switcher" role="tablist" aria-label="Режим екрана">
-        <button class="view-btn active" data-target-view="split" title="Екран проектора + Пульт на одному екрані">
+        <button
+          class="view-btn active"
+          data-target-view="split"
+          title="Екран проектора + Пульт на одному екрані"
+        >
           📱 Split
         </button>
-        <button class="view-btn" data-target-view="projector" title="Повний екран для Проектора та Smart TV">
+        <button
+          class="view-btn"
+          data-target-view="projector"
+          title="Повний екран для Проектора та Smart TV"
+        >
           📽️ Проектор
         </button>
-        <button class="view-btn" data-target-view="remote" title="Повноекранний VJ-пульт для смартфона">
+        <button
+          class="view-btn"
+          data-target-view="remote"
+          title="Повноекранний VJ-пульт для смартфона"
+        >
           🎛️ Пульт
         </button>
       </div>
     </header>
 
-    <!-- СЕКЦІЯ 1: ЕКРАН ПРОЕКТОРА / SMART TV (WebGL Shader Canvas + Apple TV HUD Dock) -->
+    <!-- СЕКЦІЯ 1: ЕКРАН ПРОЕКТОРА / SMART TV (WebGL Shader Canvas + TD CV Overlay + Apple TV HUD Dock) -->
     <section class="projector-stage" id="projectorStage">
       <canvas id="shaderCanvas"></canvas>
+      <canvas id="tdOverlayCanvas" class="td-overlay-canvas"></canvas>
+
+      <!-- Приховані елементи для Відео / Камери / Фото текстури (Media TOP) -->
+      <video id="customVideoEl" playsinline muted loop hidden></video>
+      <img id="customImageEl" alt="" hidden />
 
       <!-- Живий міні-індикатор 4 частотних смуг DSP (Sub-Bass, Bass, Mid, High) -->
       <div class="dsp-telemetry-hud" id="dspHud">
@@ -66,7 +87,19 @@
       >
         <button class="dock-item active" data-mode="lasers" tabindex="0">
           <span class="dock-icon">🟢</span>
-          <span class="dock-label">Лазери</span>
+          <span class="dock-label">Galvo Лазер</span>
+        </button>
+        <button class="dock-item" data-mode="blobtrack" tabindex="-1">
+          <span class="dock-icon">👁️</span>
+          <span class="dock-label">TD Blob CV</span>
+        </button>
+        <button class="dock-item" data-mode="pointcloud" tabindex="-1">
+          <span class="dock-icon">✨</span>
+          <span class="dock-label">TD Хмара</span>
+        </button>
+        <button class="dock-item" data-mode="reaction" tabindex="-1">
+          <span class="dock-icon">🧬</span>
+          <span class="dock-label">TD Реакція</span>
         </button>
         <button class="dock-item" data-mode="synthwave" tabindex="-1">
           <span class="dock-icon">🟣</span>
@@ -99,7 +132,7 @@
       </nav>
     </section>
 
-    <!-- СЕКЦІЯ 2: МОБІЛЬНИЙ ПУЛЬТ КЕРУВАННЯ НА СМАРТФОНІ (OLED VJ CONTROLLER) -->
+    <!-- СЕКЦІЯ 2: МОБІЛЬНИЙ ПУЛЬТ ТА СТУДІЯ ЕФЕКТІВ (TOUCHDESIGNER + FILMORA STUDIO) -->
     <section class="mobile-vj-deck" id="mobileDeck" aria-label="Мобільний VJ Пульт">
       <!-- Джерело звуку та сенсор смартфона -->
       <div class="deck-card source-strip">
@@ -127,53 +160,350 @@
         <input type="file" id="audioFileInput" accept="audio/*" hidden />
       </div>
 
-      <!-- Сітка 3x2 неонових педів візуальних сцен -->
-      <div class="preset-grid" id="presetGrid" aria-label="Візуальні сцени">
-        <button class="vj-pad active" data-mode="lasers" tabindex="0">
-          <span class="pad-emoji">🟢</span>
-          <span class="pad-name">Laser Matrix</span>
-          <span class="pad-sub">Клубні промені</span>
+      <!-- Перемикач вкладок студії: Сцени / Filmora FX / TouchDesigner CHOP Ноди / Відео & Камера -->
+      <div class="studio-tabs" role="tablist" aria-label="Інструменти VJ-студії">
+        <button class="studio-tab active" data-tab="tabScenes" role="tab">
+          🎛️ Сцени & XY
         </button>
-        <button class="vj-pad" data-mode="synthwave" tabindex="-1">
-          <span class="pad-emoji">🟣</span>
-          <span class="pad-name">3D Synthwave</span>
-          <span class="pad-sub">Аудіо-ландшафт</span>
+        <button class="studio-tab" data-tab="tabFilmoraFx" role="tab">
+          🎞️ Filmora FX
         </button>
-        <button class="vj-pad" data-mode="ferrofluid" tabindex="-1">
-          <span class="pad-emoji">🔵</span>
-          <span class="pad-name">Plasma Orb</span>
-          <span class="pad-sub">3D Феррофлюїд</span>
+        <button class="studio-tab" data-tab="tabTdNodes" role="tab">
+          🔌 TD Ноди
         </button>
-        <button class="vj-pad" data-mode="tunnel" tabindex="-1">
-          <span class="pad-emoji">🟠</span>
-          <span class="pad-name">Cyber Tunnel</span>
-          <span class="pad-sub">Гіперпростір</span>
-        </button>
-        <button class="vj-pad" data-mode="liquid" tabindex="-1">
-          <span class="pad-emoji">🌈</span>
-          <span class="pad-name">Silk Fluid</span>
-          <span class="pad-sub">Неонова плазма</span>
-        </button>
-        <button class="vj-pad" data-mode="fractal" tabindex="-1">
-          <span class="pad-emoji">⚡</span>
-          <span class="pad-name">Kaleidoscope</span>
-          <span class="pad-sub">Фрактал-мандала</span>
+        <button class="studio-tab" data-tab="tabMediaTop" role="tab">
+          📹 Відео/Камера
         </button>
       </div>
 
-      <!-- Інтерактивний XY MORPH TOUCHPAD -->
-      <div class="xy-pad-wrapper">
-        <div class="xy-pad" id="xyPad">
-          <div class="xy-grid-lines"></div>
-          <span class="xy-axis-label top">ШВИДКІСТЬ / ЕНЕРГІЯ (Y)</span>
-          <span class="xy-axis-label bottom">ГЕОМЕТРІЯ / РОЗКРИТТЯ (X)</span>
-          <div class="xy-puck" id="xyPuck" style="left: 50%; top: 50%">
-            <div class="xy-puck-ring"></div>
+      <!-- ВКЛАДКА 1: 9 ГЕНЕРАТИВНИХ СЦЕН + XY MORPH TOUCHPAD -->
+      <div class="studio-panel active" id="tabScenes">
+        <div class="preset-grid" id="presetGrid" aria-label="Візуальні сцени">
+          <button class="vj-pad active" data-mode="lasers" tabindex="0">
+            <span class="pad-emoji">🟢</span>
+            <span class="pad-name">Galvo Laser</span>
+            <span class="pad-sub">Лазер + Туманність</span>
+          </button>
+          <button class="vj-pad" data-mode="blobtrack" tabindex="-1">
+            <span class="pad-emoji">👁️</span>
+            <span class="pad-name">TD Blob Track</span>
+            <span class="pad-sub">CV Трекінг об'єктів</span>
+          </button>
+          <button class="vj-pad" data-mode="pointcloud" tabindex="-1">
+            <span class="pad-emoji">✨</span>
+            <span class="pad-name">TD Point Cloud</span>
+            <span class="pad-sub">3D Хмара & Plexus</span>
+          </button>
+          <button class="vj-pad" data-mode="reaction" tabindex="-1">
+            <span class="pad-emoji">🧬</span>
+            <span class="pad-name">TD Reaction</span>
+            <span class="pad-sub">Feedback Шлейфи</span>
+          </button>
+          <button class="vj-pad" data-mode="synthwave" tabindex="-1">
+            <span class="pad-emoji">🟣</span>
+            <span class="pad-name">3D Synthwave</span>
+            <span class="pad-sub">Аудіо-ландшафт</span>
+          </button>
+          <button class="vj-pad" data-mode="ferrofluid" tabindex="-1">
+            <span class="pad-emoji">🔵</span>
+            <span class="pad-name">Plasma Orb</span>
+            <span class="pad-sub">3D Феррофлюїд</span>
+          </button>
+          <button class="vj-pad" data-mode="tunnel" tabindex="-1">
+            <span class="pad-emoji">🟠</span>
+            <span class="pad-name">Cyber Tunnel</span>
+            <span class="pad-sub">Гіперпростір</span>
+          </button>
+          <button class="vj-pad" data-mode="liquid" tabindex="-1">
+            <span class="pad-emoji">🌈</span>
+            <span class="pad-name">Silk Fluid</span>
+            <span class="pad-sub">Неонова плазма</span>
+          </button>
+          <button class="vj-pad" data-mode="fractal" tabindex="-1">
+            <span class="pad-emoji">⚡</span>
+            <span class="pad-name">Kaleidoscope</span>
+            <span class="pad-sub">Фрактал-мандала</span>
+          </button>
+        </div>
+
+        <!-- Інтерактивний XY MORPH TOUCHPAD -->
+        <div class="xy-pad-wrapper">
+          <div class="xy-pad" id="xyPad">
+            <div class="xy-grid-lines"></div>
+            <span class="xy-axis-label top">ШВИДКІСТЬ / ЕНЕРГІЯ (Y)</span>
+            <span class="xy-axis-label bottom">ГЕОМЕТРІЯ / РОЗКРИТТЯ (X)</span>
+            <div class="xy-puck" id="xyPuck" style="left: 50%; top: 50%">
+              <div class="xy-puck-ring"></div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- 4 КНОПКИ МИТТЄВИХ DJ-ЕФЕКТІВ (LIVE FX TRIGGERS) -->
+      <!-- ВКЛАДКА 2: КОНСТРУКТОР ШАРІВ FILMORA FX (НАКЛАДАЮТЬСЯ ОДНОЧАСНО) -->
+      <div class="studio-panel" id="tabFilmoraFx">
+        <div class="deck-card fx-studio-card">
+          <div class="strip-header">
+            <span class="strip-title">🎬 ГОТОВІ FX-КОМБІНАЦІЇ (FILMORA & TD)</span>
+            <label class="toggle-pill">
+              <input type="checkbox" id="chkBlobHud" />
+              <span>👁️ TD Рамки (CV)</span>
+            </label>
+          </div>
+          <div class="fx-preset-chips" id="fxPresetBar">
+            <button class="fx-chip active" data-fx-preset="clean">✨ Чистий</button>
+            <button class="fx-chip" data-fx-preset="vhs">📼 VHS Cyberpunk</button>
+            <button class="fx-chip" data-fx-preset="td_cv">👁️ TD Blob CV</button>
+            <button class="fx-chip" data-fx-preset="acid">🔮 Acid Kaleido</button>
+            <button class="fx-chip" data-fx-preset="led">🟩 Club LED</button>
+          </div>
+
+          <div class="fx-sliders-grid">
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>🌈 RGB Split (Аберація)</span>
+                <strong id="val_rgbSplit">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="rgbSplit"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>📼 VHS & Cyber Glitch</span>
+                <strong id="val_glitch">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="glitch"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>🔮 Калейдоскоп (Дзеркала)</span>
+                <strong id="val_kaleido">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="kaleido"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>⚡ Neon Edges (Контури)</span>
+                <strong id="val_edges">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="edges"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>🌊 Feedback Warp (Шлейф)</span>
+                <strong id="val_feedback">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="feedback"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+
+            <div class="fx-slider-row">
+              <div class="fx-slider-label">
+                <span>🟩 LED Halftone Matrix</span>
+                <strong id="val_pixelate">0%</strong>
+              </div>
+              <input
+                type="range"
+                class="fx-range"
+                data-fx="pixelate"
+                min="0"
+                max="100"
+                value="0"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 3: TOUCHDESIGNER AUDIO-CHOP МАТРИЦЯ МОДУЛЯЦІЇ ТА ЗБЕРЕЖЕННЯ ПРЕСЕТІВ -->
+      <div class="studio-panel" id="tabTdNodes">
+        <div class="deck-card td-patch-card">
+          <div class="strip-header">
+            <span class="strip-title">🔌 TOUCHDESIGNER AUDIO-CHOP МАТРИЦЯ</span>
+            <div class="td-header-actions">
+              <button class="mini-action-btn" id="btnRandomPatch">🎲 Рандом</button>
+              <button class="mini-action-btn save" id="btnSaveUserPreset">💾 Зберегти</button>
+            </div>
+          </div>
+          <p class="td-hint">
+            Прив'яжіть будь-яку частоту звуку до параметра ефекту (як CHOP Export у TouchDesigner):
+          </p>
+
+          <div class="chop-matrix">
+            <div class="chop-row">
+              <span class="chop-param">🌈 RGB Split</span>
+              <select class="chop-select" data-chop="rgbSplit">
+                <option value="none">Вимк (Ручний)</option>
+                <option value="subBass" selected>SUB (Бочка 20-60Hz)</option>
+                <option value="bass">BASS (Бас 60-250Hz)</option>
+                <option value="mid">MID (Вокал/Синти)</option>
+                <option value="high">HIGH (Хай-хети)</option>
+                <option value="lfo">LFO (Хвиля синуса)</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_rgbSplit"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">📼 VHS Glitch</span>
+              <select class="chop-select" data-chop="glitch">
+                <option value="none" selected>Вимк (Ручний)</option>
+                <option value="subBass">SUB (Бочка 20-60Hz)</option>
+                <option value="bass">BASS (Бас 60-250Hz)</option>
+                <option value="mid">MID (Вокал/Синти)</option>
+                <option value="high">HIGH (Хай-хети)</option>
+                <option value="lfo">LFO (Хвиля синуса)</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_glitch"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">🔮 Kaleidoscope</span>
+              <select class="chop-select" data-chop="kaleido">
+                <option value="none" selected>Вимк (Ручний)</option>
+                <option value="subBass">SUB (Бочка 20-60Hz)</option>
+                <option value="bass">BASS (Бас 60-250Hz)</option>
+                <option value="mid">MID (Вокал/Синти)</option>
+                <option value="high">HIGH (Хай-хети)</option>
+                <option value="lfo">LFO (Хвиля синуса)</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_kaleido"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">⚡ Neon Edges</span>
+              <select class="chop-select" data-chop="edges">
+                <option value="none" selected>Вимк (Ручний)</option>
+                <option value="subBass">SUB (Бочка 20-60Hz)</option>
+                <option value="bass">BASS (Бас 60-250Hz)</option>
+                <option value="mid">MID (Вокал/Синти)</option>
+                <option value="high">HIGH (Хай-хети)</option>
+                <option value="lfo">LFO (Хвиля синуса)</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_edges"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">🌊 Feedback Warp</span>
+              <select class="chop-select" data-chop="feedback">
+                <option value="none">Вимк (Ручний)</option>
+                <option value="subBass">SUB (Бочка 20-60Hz)</option>
+                <option value="bass" selected>BASS (Бас 60-250Hz)</option>
+                <option value="mid">MID (Вокал/Синти)</option>
+                <option value="high">HIGH (Хай-хети)</option>
+                <option value="lfo">LFO (Хвиля синуса)</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_feedback"></div></div>
+            </div>
+
+            <div class="chop-row">
+              <span class="chop-param">🟩 LED Matrix</span>
+              <select class="chop-select" data-chop="pixelate">
+                <option value="none" selected>Вимк (Ручний)</option>
+                <option value="subBass">SUB (Бочка 20-60Hz)</option>
+                <option value="bass">BASS (Бас 60-250Hz)</option>
+                <option value="mid">MID (Вокал/Синти)</option>
+                <option value="high">HIGH (Хай-хети)</option>
+                <option value="lfo">LFO (Хвиля синуса)</option>
+              </select>
+              <div class="chop-meter"><div class="chop-bar" id="chopBar_pixelate"></div></div>
+            </div>
+          </div>
+
+          <div class="user-presets-bar" id="userPresetsBar"></div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА 4: МЕДІА-МІКШЕР (ВЛАСНЕ ВІДЕО / ФОТО / ЖИВА КАМЕРА ПІД ШЕЙДЕРИ) -->
+      <div class="studio-panel" id="tabMediaTop">
+        <div class="deck-card media-top-card">
+          <div class="strip-header">
+            <span class="strip-title">📹 ВІДЕО / ФОТО / КАМЕРА (MEDIA TOP)</span>
+            <button class="mini-action-btn" id="btnClearMedia">✖ Очистити</button>
+          </div>
+          <p class="td-hint">
+            Завантажте власний відеокліп, фото або увімкніть живу камеру, щоб накладати на них ефекти Filmora та TouchDesigner:
+          </p>
+
+          <div class="media-buttons-row">
+            <button class="media-btn" id="btnUploadMedia">
+              🎬 Завантажити Відео / Фото
+            </button>
+            <button class="media-btn" id="btnLiveCamera">
+              📹 Увімкнути Live Камеру
+            </button>
+          </div>
+          <input
+            type="file"
+            id="mediaFileInput"
+            accept="video/*,image/*"
+            hidden
+          />
+
+          <div class="fx-slider-row" style="margin-top: 8px">
+            <div class="fx-slider-label">
+              <span>🎚️ Баланс Відео ↔ Шейдер (Media Mix)</span>
+              <strong id="val_mediaMix">0%</strong>
+            </div>
+            <input
+              type="range"
+              id="rangeMediaMix"
+              min="0"
+              max="100"
+              value="0"
+            />
+          </div>
+
+          <div class="fx-preset-chips" style="margin-top: 8px">
+            <button class="fx-chip active" data-media-mode="0">
+              ✨ Screen / Неон
+            </button>
+            <button class="fx-chip" data-media-mode="1">
+              🌊 Audio Displace (Хвилі від басу)
+            </button>
+            <button class="fx-chip" data-media-mode="2">
+              🔮 Cyberpunk Luma (Неонова маска)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 КНОПКИ МИТТЄВИХ DJ-ЕФЕКТІВ (ЗАВЖДИ ДОСТУПНІ ВНИЗУ ПУЛЬТА) -->
       <div class="fx-row" id="fxRow">
         <button class="fx-btn strobe" id="fxStrobe">
           <span class="fx-icon">⚡</span>
@@ -203,7 +533,9 @@
       <div class="qr-card">
         <h3>📱 Зв'язок iPhone ↔ Проектор</h3>
         <p>
-          Скануйте QR камерою iPhone або введіть однаковий <strong>Код Кімнати</strong> на обох пристроях (працює навіть між 4G та Wi-Fi!):
+          Скануйте QR камерою iPhone або введіть однаковий
+          <strong>Код Кімнати</strong> на обох пристроях (працює навіть між 4G та
+          Wi-Fi!):
         </p>
         <div class="qr-box" id="qrCodeBox"></div>
         <div class="room-input-row">
