@@ -40,6 +40,7 @@ class AuraVJApp {
     this.setupAutoHideHud();
     this.setupDesktopShortcuts();
     this.setupDesktopMouseInteractions();
+    this.setupPeerSyncHeartbeat();
     this.requestScreenWakeLock();
 
     // Запускаємо рендер-цикл одразу (навіть до першого кліку працює візуальне демо)
@@ -248,13 +249,29 @@ class AuraVJApp {
       qrModal.hidden = true;
     });
     const btnJoinRoom = document.getElementById("btnJoinRoom");
+    const roomInput = document.getElementById("roomInput");
+    const submitJoin = () => {
+      const val = roomInput ? roomInput.value.trim() : "";
+      if (val) {
+        this.sync.setRoomId(val);
+        this.visualizer.roomId = this.sync.roomId;
+        this.renderQrModal();
+        this.sync.send({ type: "peerHeartbeat", role: this.currentView });
+        if (btnJoinRoom) btnJoinRoom.textContent = "CONNECTED!";
+        setTimeout(() => {
+          if (btnJoinRoom) btnJoinRoom.textContent = "CONNECT";
+          qrModal.hidden = true;
+        }, 500);
+      }
+    };
     if (btnJoinRoom) {
-      btnJoinRoom.addEventListener("click", () => {
-        const val = document.getElementById("roomInput").value.trim();
-        if (val) {
-          this.sync.setRoomId(val);
-          this.visualizer.roomId = this.sync.roomId;
-          this.renderQrModal();
+      btnJoinRoom.addEventListener("click", submitJoin);
+    }
+    if (roomInput) {
+      roomInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitJoin();
         }
       });
     }
@@ -1404,7 +1421,33 @@ class AuraVJApp {
       }
       return;
     }
-    if (msg.type === "proStatus") {
+    if (msg.type === "peerHeartbeat") {
+      this.lastPeerHeartbeat = performance.now();
+      this.updatePeerStatusUI(true, msg.role);
+      // Відповідаємо синхронізацією стану новому підключеному пристрою
+      if (msg.role !== this.currentView && msg.isPing) {
+        this.sync.send({
+          type: "stateSync",
+          mode: this.visualizer.modes[this.visualizer.modeIndex],
+          isPro: this.isPro,
+          postFx: { ...this.visualizer.postFx },
+          chopRouting: { ...this.visualizer.chopRouting },
+        });
+      }
+    } else if (msg.type === "stateSync") {
+      this.lastPeerHeartbeat = performance.now();
+      this.updatePeerStatusUI(true);
+      if (msg.mode) {
+        this.visualizer.setMode(msg.mode);
+        this.highlightModeButtons(msg.mode);
+      }
+      if (typeof msg.isPro === "boolean") {
+        this.setProStatus(msg.isPro, false);
+      }
+      if (msg.postFx || msg.chopRouting) {
+        this.applyPatchState(msg);
+      }
+    } else if (msg.type === "proStatus") {
       this.setProStatus(!!msg.isPro, false);
     } else if (msg.type === "venueKeystone") {
       if (msg.venueOverlay) this.visualizer.venueOverlay = msg.venueOverlay;
@@ -1428,13 +1471,47 @@ class AuraVJApp {
         this.visualizer.triggerShockwave();
       }
     } else if (msg.type === "dspTelemetry") {
+      // Приймаємо аудіо-телеметрію з пульта як у режимі Проектора, так і у Split-режимі!
       if (
-        this.currentView === "projector" &&
+        this.currentView !== "remote" &&
         this.dsp.activeSource !== "native_android"
       ) {
         this.dsp.activeSource = "remote";
         this.dsp.ingestRemoteTelemetry(msg.state);
       }
+    }
+  }
+
+  setupPeerSyncHeartbeat() {
+    this.lastPeerHeartbeat = null;
+    setInterval(() => {
+      this.sync.send({
+        type: "peerHeartbeat",
+        role: this.currentView,
+        isPing: true,
+      });
+      if (
+        this.lastPeerHeartbeat &&
+        performance.now() - this.lastPeerHeartbeat > 16000
+      ) {
+        this.updatePeerStatusUI(false);
+      }
+    }, 5000);
+  }
+
+  updatePeerStatusUI(isLinked, role = null) {
+    const badge = document.getElementById("btnRoomBadge");
+    const text = document.getElementById("roomCodeText");
+    if (!badge || !text) return;
+
+    if (isLinked) {
+      badge.classList.add("peer-linked");
+      badge.title = `Кімната ${this.sync.roomId}: З'єднано з ${role === "remote" ? "Пультом (iPhone)" : "Екраном (Проектор)"}!`;
+      text.textContent = `${this.sync.roomId} 🟢`;
+    } else {
+      badge.classList.remove("peer-linked");
+      badge.title = `Кімната ${this.sync.roomId}: Очікування підключення другого пристрою`;
+      text.textContent = this.sync.roomId;
     }
   }
 

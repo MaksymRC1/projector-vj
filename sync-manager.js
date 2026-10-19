@@ -78,13 +78,18 @@ class SyncManager {
     try {
       localStorage.setItem("aura_vj_room", clean);
     } catch {}
-    // Перепідключаємо хмарну кімнату
-    if (this.cloudWs) {
-      try {
-        this.cloudWs.close();
-      } catch {}
+
+    // Якщо WebSocket з брокером вже відкритий, миттєво підписуємося на топік нової кімнати
+    if (this.cloudWs && this.cloudWs.readyState === WebSocket.OPEN && this.cloudConnected) {
+      this.cloudWs.send(this.buildMqttSubscribePacket(this.getTopic()));
+    } else {
+      if (this.cloudWs) {
+        try {
+          this.cloudWs.close();
+        } catch {}
+      }
+      this.connectCloudMqtt();
     }
-    this.connectCloudMqtt();
     this.notifyStatus();
   }
 
