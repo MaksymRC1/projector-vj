@@ -946,22 +946,63 @@ class AuraVJApp {
         const file = e.target.files[0];
         if (!file) return;
         this.stopCameraStream();
-        const url = URL.createObjectURL(file);
 
         if (file.type.startsWith("video/")) {
+          const url = URL.createObjectURL(file);
           videoEl.srcObject = null;
           videoEl.src = url;
           videoEl.play().catch(() => {});
           this.visualizer.setMediaSource(videoEl);
+          btnUpload.classList.add("active");
+          if (btnCamera) btnCamera.classList.remove("active");
+          updateMixUI(80);
         } else {
-          imgEl.onload = () => {
-            this.visualizer.setMediaSource(imgEl);
+          // Читаємо та стискаємо фотографію для надшвидкої передачі на проектор по LAN
+          const reader = new FileReader();
+          reader.onload = (re) => {
+            const rawData = re.target.result;
+            const tempImg = new Image();
+            tempImg.onload = () => {
+              const maxDim = 1280;
+              let w = tempImg.naturalWidth || tempImg.width;
+              let h = tempImg.naturalHeight || tempImg.height;
+              if (w > maxDim || h > maxDim) {
+                if (w > h) {
+                  h = Math.round((h * maxDim) / w);
+                  w = maxDim;
+                } else {
+                  w = Math.round((w * maxDim) / h);
+                  h = maxDim;
+                }
+              }
+              const canvas = document.createElement("canvas");
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext("2d");
+              ctx.drawImage(tempImg, 0, 0, w, h);
+              const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+
+              imgEl.onload = () => {
+                this.visualizer.setMediaSource(imgEl);
+              };
+              imgEl.src = dataUrl;
+
+              // Транслюємо фото на проектор та інші пристрої в кімнаті через LAN WebSocket
+              this.sync.send({
+                type: "mediaImage",
+                dataUrl: dataUrl,
+                mix: 0.8,
+                mode: this.visualizer.mediaBlendMode,
+              });
+
+              btnUpload.classList.add("active");
+              if (btnCamera) btnCamera.classList.remove("active");
+              updateMixUI(80);
+            };
+            tempImg.src = rawData;
           };
-          imgEl.src = url;
+          reader.readAsDataURL(file);
         }
-        btnUpload.classList.add("active");
-        btnCamera.classList.remove("active");
-        updateMixUI(80);
       });
     }
 
@@ -992,10 +1033,12 @@ class AuraVJApp {
         this.stopCameraStream();
         videoEl.pause();
         videoEl.src = "";
+        imgEl.src = "";
         this.visualizer.clearMediaSource();
         if (btnUpload) btnUpload.classList.remove("active");
         if (btnCamera) btnCamera.classList.remove("active");
         updateMixUI(0);
+        this.sync.send({ type: "mediaClear" });
       });
     }
 
@@ -1394,9 +1437,33 @@ class AuraVJApp {
       });
     }
 
-    window.onApkUpdateAvailable = () => {
+    const btnCloseApkBanner = document.getElementById("btnCloseApkBanner");
+    if (btnCloseApkBanner) {
+      btnCloseApkBanner.addEventListener("click", () => {
+        const banner = document.getElementById("apkUpdateBanner");
+        if (banner) banner.style.display = "none";
+        try {
+          sessionStorage.setItem("aura_apk_update_dismissed", "true");
+        } catch {}
+        if (window.AndroidAudioBridge && typeof window.AndroidAudioBridge.dismissApkUpdate === "function") {
+          window.AndroidAudioBridge.dismissApkUpdate(this.currentApkReleaseId || "");
+        }
+      });
+    }
+
+    window.onApkUpdateAvailable = (releaseId) => {
+      this.currentApkReleaseId = releaseId;
+      try {
+        if (sessionStorage.getItem("aura_apk_update_dismissed") === "true") return;
+      } catch {}
       const banner = document.getElementById("apkUpdateBanner");
-      if (banner) banner.style.display = "flex";
+      if (banner) {
+        banner.style.display = "flex";
+        // Автоматично приховуємо через 10 секунд, щоб не висіло постійно на екрані
+        setTimeout(() => {
+          if (banner) banner.style.display = "none";
+        }, 10000);
+      }
       const btnNative = document.getElementById("btnUpdateApkNative");
       if (btnNative) btnNative.style.display = "block";
     };
@@ -2211,7 +2278,7 @@ class AuraVJApp {
       }
       // Відповідаємо синхронізацією стану підключеному пристрою
       if (msg.isPing && !msg.isPong) {
-        this.sync.send({
+        const stateSyncPacket = {
           type: "stateSync",
           isPong: true,
           mode: this.visualizer.modes[this.visualizer.modeIndex],
@@ -2221,7 +2288,14 @@ class AuraVJApp {
           colorShift: this.visualizer.colorShift,
           postFx: { ...this.visualizer.postFx },
           chopRouting: { ...this.visualizer.chopRouting },
-        });
+          mediaMix: this.visualizer.mediaMix,
+          mediaMode: this.visualizer.mediaBlendMode,
+        };
+        const imgEl = document.getElementById("customImageEl");
+        if (imgEl && imgEl.src && imgEl.src.startsWith("data:image")) {
+          stateSyncPacket.mediaDataUrl = imgEl.src;
+        }
+        this.sync.send(stateSyncPacket);
       }
     } else if (msg.type === "stateSync") {
       if (typeof msg.hudCollapsed === "boolean") {
@@ -2243,6 +2317,21 @@ class AuraVJApp {
       }
       if (msg.postFx || msg.chopRouting) {
         this.applyPatchState(msg);
+      }
+      if (typeof msg.mediaMix === "number") {
+        this.visualizer.mediaMix = msg.mediaMix;
+      }
+      if (typeof msg.mediaMode === "number") {
+        this.visualizer.mediaBlendMode = msg.mediaMode;
+      }
+      if (msg.mediaDataUrl) {
+        const imgEl = document.getElementById("customImageEl");
+        if (imgEl) {
+          imgEl.onload = () => {
+            this.visualizer.setMediaSource(imgEl);
+          };
+          imgEl.src = msg.mediaDataUrl;
+        }
       }
     } else if (msg.type === "setProjectorHud") {
       this.setProjectorHudCollapsed(!!msg.collapsed, false);
@@ -2294,6 +2383,46 @@ class AuraVJApp {
           c.classList.toggle("active", Number(c.dataset.mediaMode) === msg.mode);
         });
       }
+    } else if (msg.type === "mediaImage" && msg.dataUrl) {
+      const imgEl = document.getElementById("customImageEl");
+      const btnUpload = document.getElementById("btnUploadMedia");
+      if (imgEl) {
+        imgEl.onload = () => {
+          this.visualizer.setMediaSource(imgEl);
+          if (typeof msg.mix === "number") {
+            this.visualizer.mediaMix = msg.mix;
+            const rangeMix = document.getElementById("rangeMediaMix");
+            const valMix = document.getElementById("val_mediaMix");
+            if (rangeMix) rangeMix.value = String(Math.round(msg.mix * 100));
+            if (valMix) valMix.textContent = `${Math.round(msg.mix * 100)}%`;
+          }
+          if (typeof msg.mode === "number") {
+            this.visualizer.mediaBlendMode = msg.mode;
+            document.querySelectorAll("[data-media-mode]").forEach((c) => {
+              c.classList.toggle("active", Number(c.dataset.mediaMode) === msg.mode);
+            });
+          }
+        };
+        imgEl.src = msg.dataUrl;
+        if (btnUpload) btnUpload.classList.add("active");
+      }
+    } else if (msg.type === "mediaClear") {
+      const imgEl = document.getElementById("customImageEl");
+      const videoEl = document.getElementById("customVideoEl");
+      if (imgEl) imgEl.src = "";
+      if (videoEl) {
+        videoEl.pause();
+        videoEl.src = "";
+      }
+      this.visualizer.clearMediaSource();
+      const btnUpload = document.getElementById("btnUploadMedia");
+      const btnCamera = document.getElementById("btnLiveCamera");
+      if (btnUpload) btnUpload.classList.remove("active");
+      if (btnCamera) btnCamera.classList.remove("active");
+      const rangeMix = document.getElementById("rangeMediaMix");
+      const valMix = document.getElementById("val_mediaMix");
+      if (rangeMix) rangeMix.value = "0";
+      if (valMix) valMix.textContent = "0%";
     } else if (msg.type === "installCustomEffect" && msg.effect) {
       this.installCustomEffect(msg.effect, true, true);
     } else if (msg.type === "mode") {

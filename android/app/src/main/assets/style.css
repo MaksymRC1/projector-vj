@@ -2553,19 +2553,162 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 /* ==========================================================================
-   13. АДАПТАЦІЯ ДЛЯ КОМПАКТНИХ ЕКРАНІВ ТЕЛЕФОНІВ (<= 380px, напр. iPhone SE)
+   13. АДАПТАЦІЯ ДЛЯ СМАРТФОНІВ У ВЕРТИКАЛЬНІЙ ОРІЄНТАЦІЇ (PORTRAIT DJ REMOTE)
    ========================================================================== */
-@media (max-width: 380px) {
+@media (max-width: 680px) {
+  .top-bar {
+    height: 42px;
+    min-height: 42px;
+    padding: 0 8px;
+  }
+
+  .brand-title {
+    font-size: 0.72rem;
+  }
+
+  .bpm-pill,
+  .room-pill,
+  .view-btn {
+    padding: 3px 6px;
+    font-size: 0.62rem;
+  }
+
+  .mobile-vj-deck {
+    padding: 6px 10px 18px;
+    gap: 8px;
+  }
+
+  body[data-view="remote"] .projector-stage {
+    height: 48px;
+    min-height: 48px;
+    margin: 4px auto 6px;
+    border-radius: 8px;
+  }
+
+  .projector-remote-bar {
+    padding: 6px 12px;
+    margin-bottom: 6px;
+    border-radius: 10px;
+  }
+
+  .remote-bar-title {
+    font-size: 10px;
+  }
+
+  .remote-bar-sub {
+    font-size: 8.5px;
+  }
+
+  .btn-toggle-hud-remote {
+    padding: 5px 12px;
+    font-size: 10.5px;
+    border-radius: 8px;
+  }
+
+  .source-strip {
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    border-radius: 10px;
+  }
+
+  .strip-header {
+    margin-bottom: 4px;
+  }
+
+  .strip-title {
+    font-size: 0.62rem;
+  }
+
+  .source-pills {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+
+  .src-pill {
+    padding: 5px 2px;
+    font-size: 0.6rem;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .src-pill .ico {
+    display: none;
+  }
+
+  .studio-tabs {
+    gap: 3px;
+    padding: 2px;
+  }
+
+  .studio-tab {
+    padding: 6px 2px;
+    font-size: 0.64rem;
+  }
+
+  .studio-tab .kbd-hint {
+    display: none !important;
+  }
+
+  .preset-grid {
+    gap: 5px;
+  }
+
   .vj-pad {
-    padding: 7px 6px;
+    min-height: 46px;
+    padding: 6px 4px;
+    gap: 2px;
+  }
+
+  .vj-pad .pad-code {
+    font-size: 0.52rem;
   }
 
   .vj-pad .pad-name {
     font-size: 0.68rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .vj-pad .pad-sub {
-    font-size: 0.5rem;
+    display: none !important;
+  }
+
+  .xy-pad-wrapper {
+    height: 155px;
+    min-height: 145px;
+    border-radius: 10px;
+  }
+
+  .fx-row {
+    padding: 6px 0 14px;
+    gap: 5px;
+  }
+
+  .fx-row .fx-btn {
+    min-height: 40px;
+    font-size: 11px;
+    padding: 6px 3px;
+    border-radius: 8px;
+  }
+
+  .fx-btn small {
+    display: none !important;
+  }
+}
+
+/* ==========================================================================
+   14. АДАПТАЦІЯ ДЛЯ КОМПАКТНИХ ЕКРАНІВ ТЕЛЕФОНІВ (<= 380px, напр. iPhone SE)
+   ========================================================================== */
+@media (max-width: 380px) {
+  .vj-pad {
+    padding: 5px 3px;
+    min-height: 42px;
+  }
+
+  .vj-pad .pad-name {
+    font-size: 0.62rem;
   }
 
   .fx-sliders-grid {

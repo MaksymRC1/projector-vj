@@ -291,7 +291,10 @@
           <svg class="ico" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           <span>Доступне оновлення AURA VJ!</span>
         </div>
-        <button class="btn-banner-update" id="btnBannerUpdateApk">ОНОВИТИ ⬇️</button>
+        <div class="apk-update-actions" style="display:inline-flex;gap:6px;align-items:center;">
+          <button class="btn-banner-update" id="btnBannerUpdateApk">ОНОВИТИ ⬇️</button>
+          <button class="btn-banner-close" id="btnCloseApkBanner" type="button" title="Закрити" style="background:transparent;border:none;color:white;cursor:pointer;font-size:16px;padding:2px 6px;opacity:0.8;">✕</button>
+        </div>
       </div>
     </section>
 
@@ -318,17 +321,6 @@
               <circle cx="12" cy="12" r="3" />
             </svg>
             <span id="lblRemoteToggleHud">Згорнути меню</span>
-          </button>
-          <button
-            class="btn-apk-update-remote"
-            id="btnRemoteUpdateApk"
-            type="button"
-            title="Запустити оновлення APK на проекторі з телефону"
-          >
-            <svg class="ico" viewBox="0 0 24 24">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            <span>Оновити APK</span>
           </button>
         </div>
       </div>
@@ -414,7 +406,7 @@
             <rect x="3" y="14" width="7" height="7" rx="1" />
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-          <span>Сцени & XY</span>
+          <span>Сцени</span>
           <span class="kbd-hint">Q</span>
         </button>
         <button class="studio-tab" data-tab="tabFilmoraFx" role="tab">
@@ -432,7 +424,7 @@
             <circle cx="18" cy="18" r="2.5" />
             <path d="M8.5 6H12a4 4 0 0 1 4 4v5.5" />
           </svg>
-          <span>CHOP Матриця</span>
+          <span>CHOP</span>
           <span class="kbd-hint">R</span>
         </button>
         <button class="studio-tab" data-tab="tabMediaTop" role="tab">
@@ -440,7 +432,7 @@
             <polygon points="23 7 16 12 23 17 23 7" />
             <rect x="1" y="5" width="15" height="14" rx="2" />
           </svg>
-          <span>Медіа Вхід</span>
+          <span>Медіа</span>
           <span class="kbd-hint">T</span>
         </button>
         <button

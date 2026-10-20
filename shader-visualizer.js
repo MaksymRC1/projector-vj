@@ -590,22 +590,23 @@ class ShaderVisualizer {
 
         // Змішування з власним Відео / Фото / Камерою (Media TOP)
         if (u_mediaMix > 0.01) {
-          vec2 texUv = uv * vec2(u_resolution.y / max(1.0, u_resolution.x), -1.0) * 0.5 + 0.5;
+          vec2 texUv = gl_FragCoord.xy / u_resolution.xy;
           if (u_mediaMode == 1) {
-            // Режим Audio Displace (відео деформується хвилями басу та шейдера)
+            // Режим Audio Displace (відео/фото деформується хвилями басу та шейдера)
             texUv += (col.rg - 0.2) * (0.04 + u_subBass * 0.08);
           }
           texUv = clamp(texUv, 0.001, 0.999);
           vec3 mediaCol = texture2D(u_mediaTex, texUv).rgb;
 
           if (u_mediaMode == 2) {
-            // Режим Neon Cyberpunk Mask (підсвічення яскравості відео неоновою палітрою)
+            // Режим Neon Cyberpunk Mask (підсвічення яскравості відео/фото неоновою палітрою)
             float luma = dot(mediaCol, vec3(0.299, 0.587, 0.114));
             vec3 neonMedia = palette(luma * 1.5 + u_time * 0.2) * pow(luma * 1.3, 1.5) * (1.0 + u_subBass);
             col = mix(col, neonMedia + col * 0.4, u_mediaMix);
           } else {
-            // Add / Screen blend
-            col = mix(col, mediaCol * (0.85 + u_beatIntensity * 0.35) + col * 0.65, u_mediaMix);
+            // Режим 0: Add / Screen / Proportional Overlay
+            vec3 blended = mix(col, mediaCol, min(1.0, u_mediaMix * 1.15));
+            col = blended + mediaCol * u_beatIntensity * 0.15;
           }
         }
 
@@ -862,6 +863,7 @@ class ShaderVisualizer {
   setMediaSource(element) {
     this.mediaElement = element;
     this.hasMedia = !!element;
+    this.mediaNeedsUpload = true;
     if (this.hasMedia && this.mediaMix < 0.1) {
       this.mediaMix = 0.75;
     }
@@ -870,6 +872,7 @@ class ShaderVisualizer {
   clearMediaSource() {
     this.mediaElement = null;
     this.hasMedia = false;
+    this.mediaNeedsUpload = false;
     this.mediaMix = 0.0;
   }
 
@@ -909,15 +912,18 @@ class ShaderVisualizer {
   updateMediaTexture() {
     if (!this.hasMedia || !this.mediaElement || this.mediaMix <= 0.01) return;
     const gl = this.gl;
+    const isVideo = this.mediaElement instanceof HTMLVideoElement;
+    if (!isVideo && !this.mediaNeedsUpload) {
+      // Статичне фото вже завантажено в текстуру GPU — не перезавантажуємо щокадрово
+      return;
+    }
     try {
-      if (
-        this.mediaElement instanceof HTMLVideoElement &&
-        this.mediaElement.readyState < 2
-      ) {
-        return;
-      }
+      if (isVideo && this.mediaElement.readyState < 2) return;
+      if (!isVideo && (!this.mediaElement.complete || this.mediaElement.naturalWidth === 0)) return;
+
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.mediaTexture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
       gl.texImage2D(
         gl.TEXTURE_2D,
         0,
@@ -926,6 +932,7 @@ class ShaderVisualizer {
         gl.UNSIGNED_BYTE,
         this.mediaElement
       );
+      this.mediaNeedsUpload = false;
     } catch {
       // Безпечний пропуск кадру, якщо відео ще буферизується
     }

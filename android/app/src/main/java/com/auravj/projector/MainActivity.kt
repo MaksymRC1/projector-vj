@@ -204,6 +204,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun dismissApkUpdate(releaseId: String) {
+            prefs.edit().putString("last_known_release_id", releaseId).apply()
+        }
+
+        @JavascriptInterface
         fun getProjectorIp(): String = this@MainActivity.getLocalIpAddress()
 
         @JavascriptInterface
@@ -225,10 +230,14 @@ class MainActivity : AppCompatActivity() {
                 conn.setRequestProperty("User-Agent", "AuraVJ-Projector/2.7")
                 if (conn.responseCode in 200..299) {
                     val body = conn.inputStream.bufferedReader().readText()
-                    if (body.contains("aura-vj-projector.apk")) {
+                    val idMatch = Regex("\"id\":\\s*(\\d+)").find(body)
+                    val currentReleaseId = idMatch?.groupValues?.get(1) ?: ""
+                    val lastAcknowledgedId = prefs.getString("last_known_release_id", "")
+
+                    if (currentReleaseId.isNotEmpty() && currentReleaseId != lastAcknowledgedId && body.contains("aura-vj-projector.apk")) {
                         runOnUiThread {
                             // Сповіщаємо веб-інтерфейс та показуємо ненав'язливу підказку
-                            webView.evaluateJavascript("window.onApkUpdateAvailable && window.onApkUpdateAvailable();", null)
+                            webView.evaluateJavascript("window.onApkUpdateAvailable && window.onApkUpdateAvailable('$currentReleaseId');", null)
                         }
                     }
                 }
