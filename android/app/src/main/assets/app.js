@@ -1702,6 +1702,17 @@ class AuraVJApp {
         return;
       }
 
+      // Відкрити вікно підключення / QR: N
+      if (k === "n") {
+        e.preventDefault();
+        const qrModal = document.getElementById("qrModal");
+        if (qrModal) {
+          qrModal.hidden = !qrModal.hidden;
+          if (!qrModal.hidden) this.renderQrModal();
+        }
+        return;
+      }
+
       // Стрілки клавіатури для точного зміщення XY Puck
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
         const step = 0.04;
@@ -2361,8 +2372,11 @@ class AuraVJApp {
       badge.classList.remove("peer-linked");
       badge.classList.remove("p2p-active");
       if (isConnected) {
-        badge.title = `Сервер підключено (${this.sync.serverHost}). Очікуємо підключення іншого пристрою...`;
-        text.textContent = `${this.sync.roomId} 🟡 LAN`;
+        badge.title = `Сервер активний (${this.sync.serverHost}). Натисніть для QR-коду або відкрийте ${this.sync.serverHost} на телефоні/ноутбуці`;
+        const hostDisplay = this.sync.serverHost && this.sync.serverHost !== "localhost:3456" ? this.sync.serverHost : this.sync.roomId;
+        text.textContent = (this.currentView === "projector" || window.innerWidth > 680)
+          ? `${hostDisplay} 🟡 LAN`
+          : `${this.sync.roomId} 🟡 LAN`;
       } else {
         badge.title = `Підключення до локального сервера ${this.sync.serverHost}...`;
         text.textContent = `${this.sync.roomId} ⏳ LAN`;
