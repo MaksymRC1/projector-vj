@@ -271,171 +271,288 @@ class ShaderVisualizer {
         return length(pa - ba * h);
       }
 
-      // 0: GALVO LASER MATRIX, DIFFRACTION STARS & COSMIC NEBULA
-      vec3 sceneLasers(vec2 uv) {
-        vec3 col = vec3(0.0);
-        float spread = 0.45 + u_xy.x * 1.35;
-        float speed = 0.65 + u_xy.y * 1.5;
-
-        vec2 nebUv = uv * rot(u_time * 0.08);
-        float n1 = sin(nebUv.x * 3.2 + u_time * 0.4) * cos(nebUv.y * 2.8 - u_time * 0.3);
-        float n2 = sin(nebUv.x * 6.5 - nebUv.y * 5.2 + u_time * 0.7);
-        float nebulaMask = smoothstep(-0.2, 0.85, n1 * 0.6 + n2 * 0.4) * exp(-length(uv) * 1.15);
-        vec3 nebRed = vec3(0.95, 0.05, 0.28) * smoothstep(0.0, 0.7, n1);
-        vec3 nebGreen = vec3(0.0, 0.95, 0.35) * smoothstep(0.1, 0.8, n2);
-        col += (nebRed * (0.18 + u_bass * 0.32) + nebGreen * (0.12 + u_mid * 0.25)) * nebulaMask;
-
-        vec2 starUv = uv * rot(-u_time * 0.05) * (14.0 + u_xy.x * 8.0);
-        vec2 starId = floor(starUv);
-        vec2 starF = fract(starUv) - 0.5;
-        float sh = hash21(starId);
-        if (sh > 0.68) {
-          vec2 starOffset = vec2(fract(sh * 13.7) - 0.5, fract(sh * 29.3) - 0.5) * 0.6;
-          float starDist = length(starF - starOffset);
-          float twinkle = 0.5 + 0.5 * sin(u_time * 6.0 + sh * 50.0);
-          float starGlow = (0.0025 * (0.4 + u_high * 1.6) * twinkle) / (starDist * starDist + 0.0015);
-          vec3 starCol = (sh > 0.91) ? vec3(1.0, 0.15, 0.35) : vec3(0.1, 1.0, 0.35);
-          col += starCol * starGlow * 0.16;
-        }
-
-        for (float i = 0.0; i < 6.0; i += 1.0) {
-          float phase = u_time * speed * 0.9 + i * 1.047 + floor(u_beatCount) * 0.55;
-          vec2 pA = vec2(
-            sin(phase * 1.3 + i) * (0.55 + u_bass * 0.25) * spread,
-            cos(phase * 0.9 - i * 0.7) * (0.42 + u_subBass * 0.2)
-          );
-          vec2 pB = vec2(
-            sin(phase * 0.8 - i * 1.4 + 1.5) * (0.6 + u_mid * 0.25) * spread,
-            cos(phase * 1.5 + i * 1.1) * (0.45 + u_bass * 0.2)
-          );
-
-          float segDist = sdSegment(uv, pA, pB);
-          float laserLine = (0.0016 + u_subBass * 0.002) / (segDist + 0.001);
-          float endDots = (0.0025 + u_beatIntensity * 0.003) / (min(length(uv - pA), length(uv - pB)) + 0.003);
-
-          vec3 galvoCol = (mod(i, 2.0) < 0.5)
-            ? mix(vec3(0.05, 1.0, 0.35), palette(i * 0.15 + u_time * 0.1), u_colorShift)
-            : mix(vec3(1.0, 0.08, 0.32), palette(i * 0.15 + 0.4 + u_time * 0.1), u_colorShift);
-
-          col += galvoCol * laserLine * 0.32;
-          col += mix(galvoCol, vec3(1.0), 0.55) * endDots * 0.38;
-        }
-
-        for (float i = -4.0; i <= 4.0; i += 1.0) {
-          float angle = i * 0.16 * spread + sin(u_time * speed + i * 0.7) * (0.22 + u_mid * 0.35);
-          angle += sin(u_beatCount * 1.7 + i) * 0.15 * u_beatIntensity;
-
-          vec2 origin = vec2(0.0, 0.88);
-          vec2 p = uv - origin;
-          vec2 dir = normalize(vec2(sin(angle), -cos(angle)));
-          float proj = max(0.0, dot(p, dir));
-          float dist = length(p - dir * proj);
-
-          float beam = (0.0012 + u_subBass * 0.0018) / (dist + 0.0015);
-          beam *= smoothstep(0.0, 0.15, proj) * smoothstep(2.3, 0.3, proj);
-          col += palette(i * 0.09 + u_time * 0.15) * beam * 0.2;
-        }
-
-        return col;
+      float sdHexagon(vec2 p, float r) {
+        vec3 k = vec3(-0.866025404, 0.5, 0.577350269);
+        p = abs(p);
+        p -= 2.0 * min(dot(k.xy, p), 0.0) * k.xy;
+        p -= vec2(clamp(p.x, -k.z * r, k.z * r), r);
+        return length(p) * sign(p.y);
       }
 
-      // 1: 3D SYNTHWAVE AUDIO TERRAIN
-      vec3 sceneSynthwave(vec2 uv) {
-        vec3 col = vec3(0.0);
-        float horizon = -0.05 + (u_xy.y - 0.5) * 0.35;
+      float sdEquilateralTriangle(vec2 p, float r) {
+        float k = sqrt(3.0);
+        p.x = abs(p.x) - r;
+        p.y = p.y + r / k;
+        if (p.x + k * p.y > 0.0) p = vec2(p.x - k * p.y, -k * p.x - p.y) / 2.0;
+        p.x -= clamp(p.x, -2.0 * r, 0.0);
+        return -length(p) * sign(p.y);
+      }
 
-        vec2 sunUv = uv - vec2(0.0, horizon + 0.36);
-        float sunRadius = 0.28 + u_subBass * 0.09;
-        float sunDist = length(sunUv);
-        if (sunDist < sunRadius) {
-          float stripes = sin((sunUv.y + u_time * 0.06) * 48.0);
-          float mask = smoothstep(-0.1, 0.05, stripes + sunUv.y * 2.5);
-          vec3 sunCol = mix(vec3(1.0, 0.08, 0.55), vec3(1.0, 0.85, 0.1), (sunUv.y + sunRadius) / (2.0 * sunRadius));
-          col += sunCol * mask;
+      float smin(float a, float b, float k) {
+        float h = max(k - abs(a - b), 0.0) / k;
+        return min(a, b) - h * h * k * (1.0 / 4.0);
+      }
+
+      float mapFerrofluid(vec3 p) {
+        vec3 center = vec3(0.0, 0.05, 0.0);
+        vec3 q = p - center;
+        float r = length(q);
+        vec3 nq = q / max(r, 0.001);
+        float spikeFreq = 8.0 + u_xy.x * 4.0;
+        float s1 = sin(nq.x * spikeFreq) * cos(nq.y * spikeFreq) * sin(nq.z * spikeFreq);
+        float s2 = sin(nq.x * (spikeFreq * 1.8) + u_time * 2.0) * cos(nq.z * (spikeFreq * 1.8));
+        float spikes = pow(max(0.0, s1 * 0.7 + s2 * 0.4), 2.5) * (0.35 + u_bass * 0.55 + u_beatIntensity * 0.25);
+        float sphere = r - (0.52 + u_subBass * 0.14) - spikes;
+
+        float ripple = sin(length(p.xz) * 14.0 - u_time * 4.0) * (0.02 + u_subBass * 0.035) * exp(-length(p.xz) * 0.8);
+        float plane = p.y + 0.65 - ripple;
+        return smin(sphere, plane, 0.22);
+      }
+
+      vec3 calcFerroNormal(vec3 p) {
+        vec2 e = vec2(0.005, 0.0);
+        return normalize(vec3(
+          mapFerrofluid(p + e.xyy) - mapFerrofluid(p - e.xyy),
+          mapFerrofluid(p + e.yxy) - mapFerrofluid(p - e.yxy),
+          mapFerrofluid(p + e.yyx) - mapFerrofluid(p - e.yyx)
+        ));
+      }
+
+      // 0: LASER MATRIX & VOLUMETRIC BEAMS (CONCERT HAZE & MULTI-POD LASERS)
+      vec3 sceneLasers(vec2 uv) {
+        vec3 col = vec3(0.004, 0.008, 0.016);
+        float spread = 0.55 + u_xy.x * 1.25;
+        float speed = 0.75 + u_xy.y * 1.4;
+
+        vec2 smokeUv = uv * 2.2 + vec2(u_time * 0.08, -u_time * 0.12);
+        float smoke1 = noise2D(smokeUv);
+        float smoke2 = noise2D(smokeUv * 2.1 - vec2(u_time * 0.15, u_time * 0.05));
+        float haze = smoothstep(0.2, 0.85, smoke1 * 0.6 + smoke2 * 0.4);
+        col += vec3(0.01, 0.04, 0.06) * haze * (0.8 + u_subBass * 0.6);
+
+        vec2 pods[4];
+        pods[0] = vec2(-0.82, 0.88);
+        pods[1] = vec2(-0.28, 0.92);
+        pods[2] = vec2(0.28, 0.92);
+        pods[3] = vec2(0.82, 0.88);
+
+        vec3 podColors[4];
+        podColors[0] = vec3(0.0, 1.0, 0.35);
+        podColors[1] = vec3(0.0, 0.88, 1.0);
+        podColors[2] = vec3(0.0, 0.88, 1.0);
+        podColors[3] = vec3(0.0, 1.0, 0.35);
+
+        for (int p = 0; p < 4; p++) {
+          float dPod = length(uv - pods[p]);
+          float podGlow = 0.005 / (dPod * dPod + 0.0018);
+          col += podColors[p] * podGlow * (0.4 + u_subBass * 0.5);
+          col += vec3(1.0) * (0.0018 / (dPod + 0.0015));
         }
-        col += vec3(0.95, 0.1, 0.6) * (0.028 / (abs(sunDist - sunRadius) + 0.04)) * (0.6 + u_subBass * 0.7);
 
-        if (uv.y < horizon) {
-          float z = 1.0 / abs(uv.y - horizon);
-          float x = uv.x * z * (0.8 + u_xy.x * 0.8);
+        for (int p = 0; p < 4; p++) {
+          vec2 origin = pods[p];
+          vec2 dirVec = uv - origin;
+          vec3 podCol = podColors[p];
+          float pSign = (p < 2) ? -1.0 : 1.0;
 
-          float mountainWave = sin(x * 0.6) * cos(z * 0.3 - u_time * 3.5);
-          float elevation = smoothstep(1.2, 4.5, abs(x)) * mountainWave * (0.3 + u_bass * 0.8);
+          for (float i = -3.0; i <= 3.0; i += 1.0) {
+            float baseAngle = (pSign * 0.42) + i * 0.11 * spread;
+            float scanOsc = sin(u_time * speed * 2.2 + i * 0.8 + float(p) * 1.5) * (0.16 + u_mid * 0.22);
+            float angle = baseAngle + scanOsc;
 
-          float gridX = abs(fract(x + elevation) - 0.5);
-          float gridZ = abs(fract(z * 0.5 - u_time * (2.5 + u_subBass * 2.0)) - 0.5);
-          float line = min(gridX, gridZ);
+            vec2 rayDir = normalize(vec2(sin(angle), -cos(angle)));
+            float proj = max(0.0, dot(dirVec, rayDir));
+            float perpDist = length(dirVec - rayDir * proj);
 
-          float glow = 0.018 / (line + 0.012);
-          float fog = exp(-z * 0.08);
-          vec3 gridCol = palette(z * 0.04 - u_time * 0.2 + abs(x) * 0.05);
-          col += gridCol * glow * fog * (0.7 + u_mid * 0.8);
-        } else {
-          vec2 starGrid = floor((uv + vec2(u_time * 0.02, 0.0)) * 35.0);
-          float h = hash21(starGrid);
-          if (h > 0.96) {
-            float twinkle = sin(u_time * 8.0 + h * 40.0) * 0.5 + 0.5;
-            col += vec3(0.4, 0.9, 1.0) * twinkle * (0.3 + u_high * 1.5);
+            float core = 0.0012 / (perpDist + 0.001);
+            float beamHaze = (0.003 * (0.35 + haze * 1.3)) / (perpDist * perpDist + 0.002);
+            float lengthFade = smoothstep(0.0, 0.12, proj) * smoothstep(2.4, 0.4, proj);
+
+            vec3 beamLight = mix(podCol, vec3(1.0), 0.35) * core + podCol * beamHaze;
+            col += beamLight * lengthFade * (0.35 + u_subBass * 0.45);
           }
         }
-        col += vec3(0.0, 1.0, 0.9) * (0.004 / (abs(uv.y - horizon) + 0.003)) * (1.0 + u_beatIntensity);
-        return col;
-      }
 
-      // 2: 3D FERROFLUID PLASMA SPHERE
-      vec3 sceneFerrofluid(vec2 uv) {
-        vec3 col = vec3(0.0);
-        float r = length(uv);
-        float a = atan(uv.y, uv.x);
+        for (float s = 0.0; s < 3.0; s += 1.0) {
+          float sheetPhase = u_time * (speed * 0.75) + s * 1.8 + floor(u_beatCount) * 0.6;
+          vec2 pTop = vec2(sin(sheetPhase * 0.7) * 0.32, 0.85);
+          vec2 pBottomL = vec2(-0.75 + sin(sheetPhase) * 0.2, -0.65 + cos(sheetPhase * 1.2) * 0.15);
+          vec2 pBottomR = vec2(0.75 + cos(sheetPhase) * 0.2, -0.65 + sin(sheetPhase * 1.1) * 0.15);
 
-        float spikes =
-          sin(a * floor(6.0 + u_xy.x * 12.0) + u_time * 2.5) * u_bass * 0.14 +
-          cos(a * floor(12.0 + u_xy.y * 16.0) - u_time * 4.0) * u_mid * 0.09 +
-          sin(a * 24.0 + u_time * 7.0) * u_high * 0.05;
+          float d1 = sdSegment(uv, pTop, pBottomL);
+          float d2 = sdSegment(uv, pTop, pBottomR);
+          float d3 = sdSegment(uv, pBottomL, pBottomR);
+          float sheetEdge = min(min(d1, d2), d3);
 
-        float baseRadius = 0.28 + u_subBass * 0.18 + spikes;
-
-        if (r < baseRadius) {
-          float z = sqrt(max(0.0, baseRadius * baseRadius - r * r));
-          vec3 normal = normalize(vec3(uv.x + spikes * 0.6, uv.y + spikes * 0.6, z));
-          vec3 lightDir = normalize(vec3(cos(u_time * 1.5), sin(u_time * 1.2), 0.8));
-          float diff = max(0.0, dot(normal, lightDir));
-          float rim = pow(1.0 - max(0.0, normal.z), 2.5);
-
-          vec3 coreCol = palette(r * 1.8 - u_time * 0.25 + diff * 0.4);
-          col = coreCol * (0.25 + diff * 0.85) + palette(u_time * 0.5 + 0.3) * rim * 1.8;
-          col += vec3(1.0) * pow(diff, 14.0) * (0.7 + u_high);
+          float edgeLine = (0.002 + u_subBass * 0.0025) / (sheetEdge + 0.0015);
+          vec3 sheetCol = (s == 1.0) ? vec3(0.0, 0.95, 1.0) : vec3(0.0, 1.0, 0.4);
+          col += sheetCol * edgeLine * 0.45;
         }
 
-        float corona = (0.012 + u_subBass * 0.02) / (abs(r - baseRadius) + 0.008);
-        col += palette(a / (2.0 * PI) + u_time * 0.2) * corona * 0.65;
+        return col;
+      }
 
-        float ring = abs(r - (baseRadius + 0.14 + fract(u_beatPhase) * 0.35));
-        col += palette(u_beatCount * 0.2) * (0.003 / (ring + 0.005)) * (1.0 - fract(u_beatPhase)) * (0.5 + u_subBass);
+      // 1: 3D SYNTHWAVE AUDIO TERRAIN (RETRO SUN, CEILING & UNDULATING MOUNTAINS)
+      vec3 sceneSynthwave(vec2 uv) {
+        vec3 col = vec3(0.02, 0.01, 0.05);
+        float horizon = -0.02 + (u_xy.y - 0.5) * 0.25;
+
+        vec2 sunUv = uv - vec2(0.0, horizon + 0.38);
+        float sunRadius = 0.32 + u_subBass * 0.08;
+        float sunDist = length(sunUv);
+        if (sunDist < sunRadius) {
+          float normY = (sunUv.y + sunRadius) / (2.0 * sunRadius);
+          float stripeFreq = 34.0;
+          float stripeCut = mix(0.1, 0.65, 1.0 - normY);
+          float stripe = fract(sunUv.y * stripeFreq - u_time * 0.08);
+          if (stripe > stripeCut || normY > 0.72) {
+            vec3 sunCol = mix(vec3(1.0, 0.05, 0.6), vec3(1.0, 0.88, 0.15), normY);
+            col = sunCol;
+          }
+        }
+        col += vec3(1.0, 0.1, 0.6) * (0.035 / (abs(sunDist - sunRadius) + 0.045)) * (0.7 + u_subBass * 0.8);
+
+        if (uv.y > horizon + 0.15) {
+          float zCeil = 1.0 / max(0.01, uv.y - horizon);
+          float xCeil = uv.x * zCeil * 0.75;
+          float gridX = abs(fract(xCeil) - 0.5);
+          float gridZ = abs(fract(zCeil * 0.4 + u_time * (1.8 + u_subBass * 1.5)) - 0.5);
+          float lineCeil = min(gridX, gridZ);
+          float glowCeil = 0.014 / (lineCeil + 0.015);
+          float fogCeil = exp(-zCeil * 0.09);
+          vec3 ceilCol = vec3(0.55, 0.1, 0.95);
+          col += ceilCol * glowCeil * fogCeil * 0.65;
+        }
+
+        if (uv.y < horizon) {
+          float z = 1.0 / max(0.008, horizon - uv.y);
+          float x = uv.x * z * (0.85 + u_xy.x * 0.6);
+
+          float valley = smoothstep(0.8, 3.2, abs(x));
+          float m1 = sin(x * 0.75) * cos(z * 0.35 - u_time * 3.0);
+          float m2 = sin(x * 1.6 + z * 0.7) * cos(x * 0.9 - u_time * 2.0) * 0.5;
+          float mountainHeight = valley * (m1 + m2) * (0.6 + u_bass * 0.9);
+
+          float gridX = abs(fract(x + mountainHeight * 0.5) - 0.5);
+          float gridZ = abs(fract(z * 0.45 - u_time * (2.4 + u_subBass * 2.8)) - 0.5);
+          float line = min(gridX, gridZ);
+
+          float glow = 0.022 / (line + 0.012);
+          float fog = exp(-z * 0.065);
+
+          vec3 gridCol = mix(vec3(1.0, 0.08, 0.75), vec3(0.0, 0.9, 1.0), sin(z * 0.1 - u_time * 0.5) * 0.5 + 0.5);
+          vec3 mountainBody = vec3(0.06, 0.015, 0.12) * (1.0 - valley * 0.4);
+          col = mountainBody + gridCol * glow * fog * (0.9 + u_mid * 0.7);
+        }
+
+        float horizGlow = 0.006 / (abs(uv.y - horizon) + 0.004);
+        col += vec3(0.0, 0.95, 1.0) * horizGlow * (1.0 + u_beatIntensity * 1.2);
 
         return col;
       }
 
-      // 3: CYBER INFINITY TUNNEL
+      // 2: 3D AUDIO FERROFLUID SPHERE (RAYMARCHED CHROME LIQUID & MAGNETIC SPIKES)
+      vec3 sceneFerrofluid(vec2 uv) {
+        vec3 col = vec3(0.01, 0.015, 0.03);
+        vec2 p = uv;
+        vec3 ro = vec3(0.0, 0.2, 2.1);
+        vec3 rd = normalize(vec3(p.x, p.y - 0.08, -1.8));
+
+        float rotY = (u_xy.x - 0.5) * 1.5 + u_time * 0.15;
+        mat2 rY = rot(rotY);
+        ro.xz = rY * ro.xz;
+        rd.xz = rY * rd.xz;
+
+        float t = 0.5;
+        float hit = -1.0;
+        for (int i = 0; i < 36; i++) {
+          vec3 pos = ro + rd * t;
+          float d = mapFerrofluid(pos);
+          if (d < 0.003) {
+            hit = t;
+            break;
+          }
+          t += d * 0.75;
+          if (t > 4.5) break;
+        }
+
+        if (hit > 0.0) {
+          vec3 pos = ro + rd * hit;
+          vec3 n = calcFerroNormal(pos);
+          vec3 ref = reflect(rd, n);
+
+          vec3 lightDir1 = normalize(vec3(0.8, 1.2, 0.9));
+          vec3 lightDir2 = normalize(vec3(-1.0, 0.4, -0.6));
+          
+          float diff1 = max(0.0, dot(n, lightDir1));
+          float diff2 = max(0.0, dot(n, lightDir2));
+          float spec1 = pow(max(0.0, dot(ref, lightDir1)), 28.0);
+          float spec2 = pow(max(0.0, dot(ref, lightDir2)), 20.0);
+          float fresnel = pow(1.0 - max(0.0, dot(-rd, n)), 3.5);
+
+          vec3 baseChrome = vec3(0.04, 0.04, 0.06);
+          vec3 cyanLight = vec3(0.0, 0.85, 1.0) * (diff1 * 0.4 + spec1 * 1.8);
+          vec3 magentaLight = vec3(1.0, 0.1, 0.75) * (diff2 * 0.35 + spec2 * 1.5);
+          vec3 iridescence = palette(fresnel * 1.4 + pos.y * 0.6 + u_time * 0.15) * fresnel * 2.2;
+
+          col = baseChrome + cyanLight + magentaLight + iridescence;
+
+          if (pos.y < -0.55) {
+            col *= 0.75;
+            col += vec3(0.0, 0.7, 1.0) * (0.2 + u_subBass * 0.3) * fresnel;
+          }
+        }
+
+        float distToCenter = length(uv - vec2(0.0, -0.05));
+        float corona = 0.022 / (abs(distToCenter - 0.58) + 0.035);
+        col += palette(atan(uv.y, uv.x) / (2.0 * PI) + u_time * 0.2) * corona * (0.4 + u_subBass * 0.6);
+
+        return col;
+      }
+
+      // 3: CYBER INFINITY TUNNEL (CONCENTRIC NEON HEXAGONS, TRIANGLES & HYPERSPACE)
       vec3 sceneTunnel(vec2 uv) {
-        vec3 col = vec3(0.0);
-        vec2 p = uv - (u_xy - 0.5) * 0.45;
-        float a = atan(p.y, p.x);
+        vec3 col = vec3(0.005, 0.005, 0.015);
+        vec2 p = uv - (u_xy - 0.5) * 0.35;
         float r = length(p);
+        float a = atan(p.y, p.x);
 
-        float sides = floor(3.0 + u_xy.x * 5.0);
-        float polyRadius = r * cos(PI / sides) / max(0.1, cos(mod(a + u_time * 0.3, 2.0 * PI / sides) - PI / sides));
+        float rays1 = pow(sin(a * 24.0 + u_time * 1.5), 18.0);
+        float rays2 = pow(cos(a * 40.0 - u_time * 2.8), 24.0);
+        float streaks = (rays1 * 0.7 + rays2 * 0.5) * smoothstep(0.08, 0.95, r);
+        vec3 streakCol = mix(vec3(0.0, 0.85, 1.0), vec3(1.0, 0.1, 0.7), sin(a * 3.0 + u_time) * 0.5 + 0.5);
+        col += streakCol * streaks * (0.45 + u_high * 1.3);
 
-        float depth = 0.35 / max(0.02, polyRadius) + u_time * (1.8 + u_xy.y * 2.5) + u_subBass * 0.6;
-        float rings = abs(fract(depth) - 0.5);
+        float tunnelSpeed = 1.2 + u_xy.y * 1.8 + u_subBass * 1.4;
+        for (float i = 1.0; i <= 14.0; i += 1.0) {
+          float gateProgress = fract((i / 14.0) - u_time * tunnelSpeed * 0.18);
+          float scale = pow(gateProgress, 2.8) * 2.2;
+          if (scale < 0.02) continue;
 
-        float radialBeams = abs(sin(a * sides * 2.0 + depth * 0.5));
-        float pattern = min(rings, radialBeams * 0.4 + 0.05);
+          vec2 polyP = p / scale;
+          float gateRot = (i * 0.28) + u_time * 0.25 * (mod(i, 2.0) == 0.0 ? 1.0 : -1.0);
+          polyP = rot(gateRot) * polyP;
 
-        float glow = (0.015 + u_beatIntensity * 0.02) / (pattern + 0.01);
-        float centerFade = smoothstep(0.02, 0.22, r);
+          float dPoly;
+          vec3 gateCol;
+          if (mod(i, 2.0) < 0.5) {
+            dPoly = abs(sdHexagon(polyP, 0.85)) * scale;
+            gateCol = vec3(0.0, 0.95, 1.0);
+          } else {
+            dPoly = abs(sdEquilateralTriangle(polyP, 0.9)) * scale;
+            gateCol = vec3(1.0, 0.08, 0.7);
+          }
 
-        col = palette(depth * 0.12 + u_time * 0.1) * glow * centerFade * 0.55;
+          float lineGlow = (0.0022 + u_beatIntensity * 0.0035) / (dPoly + 0.002);
+          float depthFade = smoothstep(0.0, 0.25, gateProgress) * smoothstep(1.0, 0.65, gateProgress);
+          col += gateCol * lineGlow * depthFade * 0.85;
+          col += vec3(1.0) * (0.0006 / (dPoly + 0.001)) * depthFade * 0.5;
+        }
+
+        col *= smoothstep(0.02, 0.18, r);
+        float coreGlow = 0.008 / (r * r + 0.004);
+        col += vec3(0.3, 0.8, 1.0) * coreGlow * (0.3 + u_subBass * 0.8);
+
         return col;
       }
 
